@@ -67,7 +67,9 @@ public class Speedrunner {
             }
         } else {
             Random rand = VisApplet.rand;
-            return Color.getHSBColor(rand.nextFloat(), 0.6f, 0.6f);
+            float s = 0.6f + rand.nextFloat()*.2f;
+            float b = 0.5f + rand.nextFloat()*.2f;
+            return Color.getHSBColor(rand.nextFloat(), s, b);
         }
     }
 }
