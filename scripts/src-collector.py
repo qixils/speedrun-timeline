@@ -242,8 +242,9 @@ def main():
 
     out = {x: None for x in ['date']+list(runner_dict.keys())}
 
-    file_re = re.compile(r"[^A-Za-z0-9-_ ]")
-    with open(file_re.sub("_", f"{game['names']['international']}-{category['name']}")+'.csv', 'w', newline='') as f:
+    # file_re = re.compile(r"[^A-Za-z0-9-_ ]")
+    # with open(file_re.sub("_", f"{game['names']['international']}-{category['name']}")+'.csv', 'w', newline='') as f:
+    with open("runs.csv", 'w', newline='') as f:
         w = csv.DictWriter(f, fieldnames=out.keys(), quoting=csv.QUOTE_NONE)
         w.writeheader()
 
