@@ -3,7 +3,7 @@ package io.github.lexikiq.vistest;
 import processing.core.PApplet;
 import processing.data.JSONObject;
 
-public class VisTest extends PApplet {
+public class VisApplet extends PApplet {
     public void settings() { // diet setup
         size(1280, 720);
     }
@@ -18,6 +18,6 @@ public class VisTest extends PApplet {
     }
 
     public static void main(String[] args) {
-        PApplet.main("io.github.lexikiq.vistest.VisTest");
+        PApplet.main("io.github.lexikiq.vistest.VisApplet");
     }
 }
