@@ -38,14 +38,7 @@ public class Speedrunner {
             boolean isUser = data.getString("rel").equals("user");
             String name;
             if (isUser) {
-                JSONObject userNames = data.getJSONObject("names");
-                if (userNames.isNull("japanese")) {
-                    name = userNames.getString("international");
-                } else if (userNames.isNull("international")) {
-                    name = userNames.getString("japanese");
-                } else {
-                    name = String.format("%s (%s)", userNames.getString("japanese"), userNames.getString("international"));
-                }
+                name = VisApplet.getFullName(data, true);
             } else {
                 name = data.getString("name");
             }
