@@ -18,7 +18,6 @@ public class VisTest extends PApplet {
     }
 
     public static void main(String[] args) {
-        System.out.println("wh2at");
         PApplet.main("io.github.lexikiq.vistest.VisTest");
     }
 }

@@ -1,1 +1,1 @@
-copy %1 target\
+copy %1 data\

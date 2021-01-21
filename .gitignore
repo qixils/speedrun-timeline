@@ -1,3 +1,4 @@
 .idea/
 target/
-*.csv
+scripts/*.csv
+scripts/*.json
