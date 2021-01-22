@@ -95,7 +95,7 @@ class Speedrun:
         name = self.authors[0]['weblink'].split('/')[-1]
         dest = os.path.join(pfp_dir, name + ".png")
         if os.path.exists(dest):
-            return None
+            return name
         with requests.get(f"https://www.speedrun.com/themes/user/{name}/image.png?version=", stream=True) as r:
             if r.status_code != 200:
                 return None
