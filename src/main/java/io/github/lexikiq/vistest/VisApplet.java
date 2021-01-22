@@ -1,9 +1,13 @@
 package io.github.lexikiq.vistest;
 
 import processing.core.PApplet;
+import processing.core.PFont;
 import processing.data.JSONObject;
 
 import java.awt.*;
+import java.text.SimpleDateFormat;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.*;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -12,18 +16,21 @@ public class VisApplet extends PApplet {
     public final Map<String, Speedrunner> speedrunners = new HashMap<>(); // all speedrunners
     public Speedrunner[] runnerArray;
     public int DATA_LENGTH; // how many dates/data entries there are
-    public String[] dates;
-    public double[] MAXES;
+    public Date[] dates;
+    public double[] maxes;
+    public double[] unitChoices;
 
+    public PFont font;
     public int frames = (int) (FRAMES_PER_DAY*365*7);
+    public JSONObject metadata;
 
     public static final float FRAMES_PER_DAY = 4f;
     public static final int RANK_SMOOTHING = 4;
     public static final int S_WIDTH = 1920; // screen width
     public static final int S_HEIGHT = 1080; // screen height
     public static final int X_MIN = 50;
-    public static final int X_MAX = S_WIDTH-50;
-    public static final int Y_MIN = 25;
+    public static final int X_MAX = S_WIDTH-200;
+    public static final int Y_MIN = 200;
     public static final int Y_MAX = S_HEIGHT-25;
     public static final int WIDTH = X_MAX-X_MIN; // drawing width
     public static final int HEIGHT = Y_MAX-Y_MIN; // drawing height
@@ -31,7 +38,12 @@ public class VisApplet extends PApplet {
     public static final float BAR_PROPORTION = 0.9f; // how much space the bar should fill up as a percentage
     public static final int BAR_HEIGHT = (int) ((rankToY(1)-rankToY(0)) * BAR_PROPORTION);
     public static final int MIN_VALUE = 90*60;
+    public static final int NAME_FONT_SIZE = 64;
+    public static final int DATE_FONT_SIZE = 96;
+    public static final int TITLE_TOP_MARGIN = 96+16;
+    public static final SimpleDateFormat formatter = new SimpleDateFormat("MMM d, yyyy");
     public static final Random rand = new Random();
+    public static final int[] SCALE_UNITS = {1, 5, 10, 15, 30, 60, 120, 180, 300, 600, 900, 1800, 3600, 7200, 10800, 18000, 36000, 86400, 172800};
 
     static {
         rand.setSeed(1152003);
@@ -42,11 +54,14 @@ public class VisApplet extends PApplet {
     }
 
     public void setup() {
+        frameRate(60);
+        font = loadFont("Jygquif1-96.vlw");
+        metadata = loadJSONObject("metadata.json");
         JSONObject players = loadJSONObject("players.json");
         String[] textFile = loadStrings("runs.csv");
         DATA_LENGTH = textFile.length - 1;
-        MAXES = new double[DATA_LENGTH];
-        dates = new String[DATA_LENGTH];
+        maxes = new double[DATA_LENGTH];
+        dates = new Date[DATA_LENGTH];
         runnerArray = new Speedrunner[players.keys().size()];
 
         // create speedrunner objects
@@ -69,9 +84,10 @@ public class VisApplet extends PApplet {
             String row = textFile[i];
             String[] cols = row.split(",");
             String date = cols[0];
-            dates[i-1] = date;
+            int[] dateSplit = Arrays.stream(date.split("-")).mapToInt(Integer::parseInt).toArray();
+            LocalDate localDate = LocalDate.of(dateSplit[0], dateSplit[1], dateSplit[2]);
+            dates[i-1] = Date.from(localDate.atStartOfDay(ZoneId.systemDefault()).toInstant());
             Set<Speedrunner> runners = new HashSet<>();
-
             for (int c = 1; c < cols.length; c++) {
                 String col = cols[c];
                 // default values are fine so ignore empty data
@@ -97,7 +113,7 @@ public class VisApplet extends PApplet {
                 Speedrunner runner = sortedRunners.get(c);
                 runner.ranks[i - 1] = c;
                 if (c <= maxValueAt) {
-                    MAXES[i-1] = runner.values[i-1];
+                    maxes[i-1] = runner.values[i-1];
                 }
             }
         }
@@ -148,7 +164,7 @@ public class VisApplet extends PApplet {
     }
 
     public float getXScale(float max) {
-        return avgIndex(MAXES, max, 14);
+        return avgIndex(maxes, max, 14);
     }
 
     public static float valueToX(float value, float scale) {
@@ -165,28 +181,61 @@ public class VisApplet extends PApplet {
         drawBackground(currentDayIndex);
         drawBars(currentDayIndex, currentScale);
 
-        fill(255);
-        ellipse(mouseX, mouseY, 20, 20);
-
         frames++;
     }
 
     public void drawBackground(float currentDay) {
         background(0);
+        fill(255);
+        textFont(font, DATE_FONT_SIZE);
+
+        // date
+        textAlign(RIGHT, BOTTOM);
+        text(formatter.format(dates[floor(currentDay)]), S_WIDTH-20, TITLE_TOP_MARGIN);
+
+        // game + category
+        String game = metadata.getString("game");
+        String category = metadata.getString("category");
+
+        textAlign(LEFT);
+        text(game, X_MIN, TITLE_TOP_MARGIN);
+
+        int categoryX = (int) (textWidth(game)+8+X_MIN);
+        textSize(DATE_FONT_SIZE * (2f/3f));
+        fill(204f); // 0.8f * 255
+        text(category, categoryX, TITLE_TOP_MARGIN-4);
+    }
+
+    public int jitterFix(float f) {
+        if (abs(f - floor(f)) > 0.99) return ceil(f);
+        return floor(f);
     }
 
     public void drawBars(float currentDay, float currentScale) {
         noStroke();
-        for (int p = 0; p < runnerArray.length; p++) {
-            Speedrunner sr = runnerArray[p];
+        textFont(font, NAME_FONT_SIZE);
+        for (Speedrunner sr : runnerArray) {
             float val = linIndex(sr.values, currentDay);
-            float x = valueToX(val, currentScale);
-            float y = rankToY(avgIndex(sr.ranks, currentDay, RANK_SMOOTHING));
-            if (y > S_HEIGHT) {continue;}
+            float fx = valueToX(val, currentScale);
+            float rank = avgIndex(sr.ranks, currentDay, RANK_SMOOTHING);
+            float fy = rankToY(rank);
+            int x = jitterFix(fx);
+            int y = jitterFix(fy);
+            if (y > S_HEIGHT) {
+                continue;
+            }
 
             Color color = sr.getColor();
             fill(color.getRed(), color.getGreen(), color.getBlue());
-            rect(X_MIN, y, x-X_MIN, BAR_HEIGHT);
+            rect(X_MIN, y, x - X_MIN, BAR_HEIGHT);
+
+            int textY = y + BAR_HEIGHT - 16;
+            fill(255);
+            textAlign(LEFT);
+            text(sr.getDisplayName(), X_MIN + 6, textY);
+
+            textAlign(RIGHT);
+            text(sr.displayValues[round(currentDay)], x - 4, textY);
         }
     }
 
@@ -204,22 +253,24 @@ public class VisApplet extends PApplet {
      * @return displayable text
      */
     public static String getFullName(JSONObject namedObject, boolean japaneseFirst) {
-
         JSONObject userNames = namedObject.getJSONObject("names");
-        if (userNames.isNull("japanese")) {
-            return userNames.getString("international");
-        }
-        if (userNames.isNull("international")) {
-            return userNames.getString("japanese");
-        }
+        return userNames.getString("international");
 
-        String[] args = new String[]{userNames.getString("japanese"), userNames.getString("international")};
-        // swap if not japanese first
-        if (!japaneseFirst) {
-            String _temp = args[0];
-            args[0] = args[1];
-            args[1] = _temp;
-        }
-        return String.format("%s (%s)", args);
+        // my CJK JP font doesn't work so oh well
+//        if (userNames.isNull("japanese")) {
+//            return userNames.getString("international");
+//        }
+//        if (userNames.isNull("international")) {
+//            return userNames.getString("japanese");
+//        }
+//
+//        String[] args = new String[]{userNames.getString("japanese"), userNames.getString("international")};
+//        // swap if not japanese first
+//        if (!japaneseFirst) {
+//            String _temp = args[0];
+//            args[0] = args[1];
+//            args[1] = _temp;
+//        }
+//        return String.format("%s (%s)", args);
     }
 }

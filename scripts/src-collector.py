@@ -263,6 +263,14 @@ def main():
             if not check:
                 break
 
+    print("Generating metadata")
+
+    with open("metadata.json", "w") as f:
+        json.dump({
+            "game": game['names']['international'],
+            "category": category['name']
+        }, f)
+
 
 if __name__ == "__main__":
     main()

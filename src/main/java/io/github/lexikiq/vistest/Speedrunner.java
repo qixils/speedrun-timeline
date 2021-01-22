@@ -47,8 +47,18 @@ public class Speedrunner {
                 name = VisApplet.getFullName(data, true);
             } else {
                 name = data.getString("name");
+                // get international name (pensive emoji)
+                if (name.startsWith("[jp]")) {
+                    String[] jpNames = name.split(" ");
+                    if (jpNames.length == 2) {
+                        String newName = jpNames[1];
+                        if (newName.startsWith("(") && newName.endsWith(")")) {
+                            name = newName.substring(1, newName.length()-1);
+                        }
+                    }
+                }
             }
-            names.add(name.replace("[jp]", ""));
+            names.add(name.replaceAll("\\[\\w{2}]", ""));
         }
 
         return String.join(" & ", names);
