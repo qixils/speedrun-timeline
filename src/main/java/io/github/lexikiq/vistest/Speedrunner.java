@@ -1,6 +1,7 @@
 package io.github.lexikiq.vistest;
 
 import lombok.Getter;
+import processing.core.PImage;
 import processing.data.JSONArray;
 import processing.data.JSONObject;
 
@@ -20,17 +21,23 @@ public class Speedrunner {
     public final int[] ranks;
     private final String displayName;
     private final Color color;
-    public Speedrunner(String runnerID, JSONArray playerInfo, int dataLength) {
+    public final List<String> comments = new ArrayList<>();
+    public final int[] commentIndex;
+    private final PImage image;
+    public Speedrunner(String runnerID, JSONArray playerInfo, int dataLength, PImage image) {
         uuid = runnerID;
         this.playerInfo = playerInfo;
+        this.image = image;
 
         values = new float[dataLength];
         ranks = new int[dataLength];
         displayValues = new String[dataLength];
+        commentIndex = new int[dataLength];
         for (int i = 0; i < dataLength; i++) {
             values[i] = 0;
             ranks[i] = VisApplet.DISPLAY_RANKS+1;
             displayValues[i] = "";
+            commentIndex[i] = -1;
         }
 
         displayName = initDisplayName();
@@ -66,20 +73,27 @@ public class Speedrunner {
 
     private Color initColor() {
         if (playerInfo.size() == 1 && playerInfo.getJSONObject(0).hasKey("name-style")) {
-            JSONObject style = playerInfo.getJSONObject(0).getJSONObject("name-style");
-            boolean isSolid = style.getString("style").equals("solid");
-            if (isSolid) {
-                return new Color(Integer.parseInt(style.getJSONObject("color").getString(COLOR_TYPE_NAME).substring(1), 16));
-            } else {
-                int color1 = Integer.parseInt(style.getJSONObject("color-from").getString(COLOR_TYPE_NAME).substring(1), 16);
-                int color2 = Integer.parseInt(style.getJSONObject("color-to").getString(COLOR_TYPE_NAME).substring(1), 16);
-                return new Color((color1+color2)/2);
-            }
+            Color color = getUserColor();
+            float[] hsb = Color.RGBtoHSB(color.getRed(), color.getGreen(), color.getBlue(), null);
+            hsb[1] = Math.max(hsb[1], 0.2f); // stops gray colors (i.e. pure white)
+            return Color.getHSBColor(hsb[0], hsb[1], hsb[2]);
         } else {
             Random rand = VisApplet.rand;
             float s = 0.6f + rand.nextFloat()*.2f;
             float b = 0.5f + rand.nextFloat()*.2f;
             return Color.getHSBColor(rand.nextFloat(), s, b);
+        }
+    }
+
+    private Color getUserColor() {
+        JSONObject style = playerInfo.getJSONObject(0).getJSONObject("name-style");
+        boolean isSolid = style.getString("style").equals("solid");
+        if (isSolid) {
+            return new Color(Integer.parseInt(style.getJSONObject("color").getString(COLOR_TYPE_NAME).substring(1), 16));
+        } else {
+            int color1 = Integer.parseInt(style.getJSONObject("color-from").getString(COLOR_TYPE_NAME).substring(1), 16);
+            int color2 = Integer.parseInt(style.getJSONObject("color-to").getString(COLOR_TYPE_NAME).substring(1), 16);
+            return new Color((color1+color2)/2);
         }
     }
 }

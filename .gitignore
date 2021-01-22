@@ -2,3 +2,6 @@
 target/
 scripts/*.csv
 scripts/*.json
+pfps/
+ffmpeg.exe
+*.iml

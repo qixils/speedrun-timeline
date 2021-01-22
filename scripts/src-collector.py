@@ -1,4 +1,5 @@
 import base64
+import os
 import re
 import typing
 from datetime import date
@@ -13,6 +14,9 @@ from dateutil.parser import parse
 api = "https://www.speedrun.com/api/v1/"
 use_milliseconds = True
 use_hours = True
+download_avatars = True
+pfp_dir = "../data/pfps"
+pfps = {}
 
 
 class WebError(Exception):
@@ -40,6 +44,7 @@ def get_id(user) -> str:
 class Speedrun:
     def __init__(self, run):
         self.raw_data = run
+        self.id = run['id']
         self.time = run['times']['primary_t']
         h = int(self.time/60/60)
         m = int(self.time/60 % 60)
@@ -54,17 +59,50 @@ class Speedrun:
         self.author_uuid = ''.join(map(get_id, sorted(self.authors, key=get_id)))
         self.author_names = [(x['names']['international'] if x['rel'] == 'user' else x['name']) for x in self.authors]
 
-        if run['date'] is not None:
-            _date = list(map(int, run['date'].split('-')))
+        self.performed = None
+        self._set_time()
+
+        self.comment = None
+        if 'comment' in run:
+            self.comment = run['comment']
+
+        if self.author_uuid not in pfps:
+            file = self._get_avatar()
+            if file is not None:
+                pfps[self.author_uuid] = file
+
+    def _set_time(self):
+        if 'kn04ewol' in self.raw_data['values'] and self.raw_data['values']['kn04ewol'] == '4qyxop3l':
+            # silly hack-fix to ignore "unverified" runs on sm64 leaderboards
+            pass
+        elif self.raw_data['date'] is not None:
+            _date = list(map(int, self.raw_data['date'].split('-')))
             self.performed = date(year=_date[0], month=_date[1], day=_date[2])
-        elif run['submitted'] is not None:
-            self.performed = parse(run['submitted']).date()
-        elif run['status']['verify-date']:
-            print(run)
-            self.performed = parse(run['status']['verify-date']).date()
-        else:
-            self.performed = None
-            # TODO: print a debug log that the run has no date?
+        elif self.raw_data['submitted'] is not None:
+            self.performed = parse(self.raw_data['submitted']).date()
+        elif self.raw_data['status']['verify-date']:
+            self.performed = parse(self.raw_data['status']['verify-date']).date()
+
+    def _get_avatar(self) -> str:
+        if self.performed is None:
+            return None
+        if len(self.authors) != 1:
+            return None
+        if not download_avatars:
+            return None
+        if 'weblink' not in self.authors[0]:
+            return None
+        name = self.authors[0]['weblink'].split('/')[-1]
+        dest = os.path.join(pfp_dir, name + ".png")
+        if os.path.exists(dest):
+            return None
+        with requests.get(f"https://www.speedrun.com/themes/user/{name}/image.png?version=", stream=True) as r:
+            if r.status_code != 200:
+                return None
+            with open(dest, 'wb') as f:
+                for c in r.iter_content(1024):
+                    f.write(c)
+                return name
 
     def __str__(self):
         return f"{self.human_time} by {' & '.join(self.author_names)} on {self.performed}"
@@ -168,6 +206,7 @@ def list_input(prompt: str, options: typing.List, default: int = None, mappings:
 
 # global variables annoy me
 def main():
+    os.makedirs(pfp_dir, exist_ok=True)
     # get game
     conf = False
     while not conf:
@@ -195,6 +234,9 @@ def main():
         if category is None:
             return
 
+    global download_avatars
+    download_avatars = boolean_input("Would you like to download user avatars?", True)
+
     # # process data # #
 
     # fun pagination time !
@@ -217,14 +259,10 @@ def main():
         print("No runs found.")
         return
 
-    global use_hours
-    global use_milliseconds
-    use_milliseconds = boolean_input("Would you like to include milliseconds in your data?", True)
-    use_hours = boolean_input("Would you like to include hours in your data?", True)
-
     print("Generating player data")
 
     sruns = sorted(filter(lambda x: x.performed is not None, map(Speedrun, runs)), key=lambda x: x.performed)
+    srunmap = {}
     runner_dict = {}
     for r in sruns:
         auths = r.authors.copy()
@@ -257,7 +295,14 @@ def main():
             out['date'] = _day
             while check and check[0].performed <= _day:
                 run = check.pop(0)
-                out[run.author_uuid] = run.human_time
+                if out[run.author_uuid] is not None and srunmap[out[run.author_uuid]]['time_t'] < run.time:
+                    continue
+                out[run.author_uuid] = run.id
+                srunmap[run.id] = {
+                    "time": run.human_time,
+                    "time_t": run.time,
+                    "comment": run.comment
+                }
             w.writerow(out)
             _day += _inc
             if not check:
@@ -268,7 +313,9 @@ def main():
     with open("metadata.json", "w") as f:
         json.dump({
             "game": game['names']['international'],
-            "category": category['name']
+            "category": category['name'],
+            "runs": srunmap,
+            "pfps": pfps
         }, f)
 
 

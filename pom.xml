@@ -25,6 +25,11 @@
             <version>1.18.16</version>
             <scope>provided</scope>
         </dependency>
+<!--        <dependency>-->
+<!--            <groupId>com.hamoid</groupId>-->
+<!--            <artifactId>VideoExport</artifactId>-->
+<!--            <version>23</version>-->
+<!--        </dependency>-->
     </dependencies>
 
     <build>
