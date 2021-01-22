@@ -232,15 +232,16 @@ public class VisApplet extends PApplet {
     public void draw() {
         float currentDayIndex = getDayFromFrames(frames);
         float currentScale = getXScale(currentDayIndex);
-        drawBackground(currentDayIndex);
-        drawHorizTickMarks(currentDayIndex, currentScale);
-        drawBars(currentDayIndex, currentScale);
+        try {
+            drawBackground(currentDayIndex);
+            drawHorizTickMarks(currentDayIndex, currentScale);
+            drawBars(currentDayIndex, currentScale);
+        } catch (ArrayIndexOutOfBoundsException e) {
+//            videoExport.endMovie();
+//            exit();
+        }
 
 //        videoExport.saveFrame();
-        if(getDayFromFrames(frames+1) >= DATA_LENGTH) {
-//            videoExport.endMovie();
-            exit();
-        }
         frames++;
     }
 
