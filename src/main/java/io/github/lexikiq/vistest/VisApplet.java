@@ -12,16 +12,15 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.*;
 import java.util.List;
-import java.util.stream.Collectors;
 
 public class VisApplet extends PApplet {
-    public final Map<String, Speedrunner> speedrunners = new HashMap<>(); // all speedrunners
+    public final Map<String, Speedrunner> speedrunners = new HashMap<String, Speedrunner>(); // all speedrunners
     public Speedrunner[] runnerArray;
     public int DATA_LENGTH; // how many dates/data entries there are
     public Date[] dates;
     public double[] maxes;
     public double[] unitChoices;
-//    public final VideoExport videoExport = new VideoExport(this, "output.mp4");
+//    public VideoExport videoExport;
 
     public PFont font;
     public int frames = 0;//(int) (FRAMES_PER_DAY*365*7);
@@ -64,6 +63,7 @@ public class VisApplet extends PApplet {
 
     public void setup() {
         frameRate(60);
+//        videoExport = new VideoExport(this, "output.mp4");
         font = loadFont("Jygquif1-96.vlw");
         metadata = loadJSONObject("metadata.json");
         JSONObject pfps = metadata.getJSONObject("pfps");
@@ -100,10 +100,15 @@ public class VisApplet extends PApplet {
             String row = textFile[i];
             String[] cols = row.split(",");
             String date = cols[0];
-            int[] dateSplit = Arrays.stream(date.split("-")).mapToInt(Integer::parseInt).toArray();
+            String[] dateSplitStr = date.split("-");
+            int[] dateSplit = new int[3];
+            for (int d = 0; d < dateSplitStr.length; d++) {
+                dateSplit[d] = Integer.parseInt(dateSplitStr[d]);
+            }
+
             LocalDate localDate = LocalDate.of(dateSplit[0], dateSplit[1], dateSplit[2]);
             dates[i-1] = Date.from(localDate.atStartOfDay(ZoneId.systemDefault()).toInstant());
-            Set<Speedrunner> runners = new HashSet<>();
+            List<Speedrunner> runners = new ArrayList<Speedrunner>();
             for (int c = 1; c < cols.length; c++) {
                 String runID = cols[c];
                 // default values are fine so ignore empty data
@@ -121,7 +126,7 @@ public class VisApplet extends PApplet {
                 speedrunner.displayValues[i - 1] = displayTime(time, USE_MILLISECONDS, true, true);
 
                 if (!run.isNull("comment")) {
-                    String[] mComment = run.getString("comment").split("\n");
+                    String[] mComment = run.getString("comment").split("\r?\n");
                     String comment = mComment[0];
                     if (mComment.length > 1) comment += " [...]";
 
@@ -138,17 +143,16 @@ public class VisApplet extends PApplet {
                     }
                     speedrunner.commentIndex[i - 1] = commentIndex;
                 }
-
+                speedrunner.setSortValue(i-1);
                 runners.add(speedrunner);
             }
 
-            // the int[] here is a hack to make the variable usable
-            final int[] _i = new int[]{i-1};
-            List<Speedrunner> sortedRunners = runners.stream().sorted(Comparator.comparingDouble(x -> x.values[_i[0]])).collect(Collectors.toCollection(ArrayList::new));
+            // sort :)
+            Collections.sort(runners);
             // update ranks
-            int maxValueAt = Math.min(sortedRunners.size(), DISPLAY_RANKS)-1;
-            for (int c = 0; c < sortedRunners.size() && c < DISPLAY_RANKS; c++) {
-                Speedrunner runner = sortedRunners.get(c);
+            int maxValueAt = Math.min(runners.size(), DISPLAY_RANKS)-1;
+            for (int c = 0; c < runners.size() && c < DISPLAY_RANKS; c++) {
+                Speedrunner runner = runners.get(c);
                 runner.ranks[i - 1] = c;
                 if (c <= maxValueAt) {
                     maxes[i-1] = runner.values[i-1];
@@ -236,12 +240,12 @@ public class VisApplet extends PApplet {
             drawBackground(currentDayIndex);
             drawHorizTickMarks(currentDayIndex, currentScale);
             drawBars(currentDayIndex, currentScale);
+//            videoExport.saveFrame();
         } catch (ArrayIndexOutOfBoundsException e) {
 //            videoExport.endMovie();
 //            exit();
         }
 
-//        videoExport.saveFrame();
         frames++;
     }
 
