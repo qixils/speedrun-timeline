@@ -26,7 +26,7 @@ public PImage missingFlag;
 public VideoExport videoExport;
 
 public PFont font;
-public int frames = (int) (FRAMES_PER_DAY*365*7);
+public int frames = 0;//(int) (FRAMES_PER_DAY*365*7);
 public JSONObject metadata;
 
 public static final String IMAGE_FOLDER = "pfps/";
