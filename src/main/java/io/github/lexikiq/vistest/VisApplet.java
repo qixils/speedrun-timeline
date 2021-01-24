@@ -29,7 +29,7 @@ public class VisApplet extends PApplet {
 //    public VideoExport videoExport;
 
     public PFont font;
-    public int frames = 0;//(int) (FRAMES_PER_DAY*365*5);
+    public int frames = (int) (FRAMES_PER_DAY*365*7);
     public JSONObject metadata;
 
     public static final String IMAGE_FOLDER = "pfps/";
@@ -141,6 +141,16 @@ public class VisApplet extends PApplet {
             dateTextWidth = max(textWidth(dateToString(date)), dateTextWidth);
         }
 
+        // pre-process platform shorthands
+        JSONObject runs = metadata.getJSONObject("runs");
+        for (Object runObject : runs.keys()) {
+            String runID = (String) runObject;
+            JSONObject runData = runs.getJSONObject(runID);
+            if (!runData.isNull("platform")) {
+                runData.setString("platform", getShortPlatform(runData.getString("platform")));
+            }
+        }
+
 //        videoExport.startMovie();
     }
 
@@ -176,24 +186,20 @@ public class VisApplet extends PApplet {
                 speedrunner.values[i - 1] = time-MIN_VALUE;
                 speedrunner.displayValues[i - 1] = displayTime(time, USE_MILLISECONDS, true, true);
 
-                if (!run.isNull("comment")) {
-                    String[] mComment = run.getString("comment").split("\r?\n");
-                    String comment = mComment[0];
-                    if (mComment.length > 1) comment += " [...]";
-
-                    int commentIndex = -1;
-                    for (int m = 0; m < speedrunner.comments.size(); m++) {
-                        if (speedrunner.comments.get(m).equals(comment)) {
-                            commentIndex = m;
-                            break;
-                        }
+                // save runs
+                int runIndex = -1;
+                for (int r = 0; r < speedrunner.runs.size(); r++) {
+                    if (speedrunner.runs.get(r).equals(runID)) {
+                        runIndex = r;
+                        break;
                     }
-                    if (commentIndex == -1) {
-                        commentIndex = speedrunner.comments.size();
-                        speedrunner.comments.add(comment);
-                    }
-                    speedrunner.commentIndex[i - 1] = commentIndex;
                 }
+                if (runIndex == -1) {
+                    runIndex = speedrunner.runs.size();
+                    speedrunner.runs.add(runID);
+                }
+                speedrunner.runIndex[i-1] = runIndex;
+
                 speedrunner.setSortValue(i-1);
                 runners.add(speedrunner);
             }
@@ -247,6 +253,14 @@ public class VisApplet extends PApplet {
         return lerp(before, after, indexRem);
     }
 
+    public float linIndex(int[] values, float index) {
+        float[] floatValues = new float[values.length];
+        for (int i = 0; i < values.length; i++) {
+            floatValues[i] = values[i];
+        }
+        return linIndex(floatValues, index);
+    }
+
     // averagingWindow generally corresponds to how snappy animations are
     // larger values have a larger window of averaging, making it smoother
     public float avgIndex(float[] values, float index, float averagingWindow) {
@@ -284,7 +298,7 @@ public class VisApplet extends PApplet {
     }
 
     public static float valueToX(float value, float scale) {
-        return lerp(X_MIN, X_MAX, value/scale);
+        return lerp(X_MIN, X_MAX*0.95f, value/scale);
     }
 
     public static float rankToY(float rank) {
@@ -383,13 +397,14 @@ public class VisApplet extends PApplet {
     }
 
     public void drawTickMarksOfUnit(int thisUnit, float currentScale, float opacity) {
+        fill(100, 100, 100, opacity);
+        textFont(font, 50);
         for (int v = 0; v < currentScale * 1.4; v+=thisUnit) {
             boolean firstMark = v == 0;
             if (firstMark) continue;
 
             float x = valueToX(v, currentScale);
 
-            fill(100, 100, 100, opacity);
             float W = 4; // width of the bar
             float Wh = W/2f; // half of the width of the bar
             float yOffset = 20; // how far above the top of the screen to render
@@ -400,7 +415,6 @@ public class VisApplet extends PApplet {
             //if (firstMark) x -= 10;
 
             textAlign(align);
-            textFont(font, 50);
             String display = displayTime(v+MIN_VALUE, false, false, true);
             text(display, x, Y_MIN-yOffset-10);
         }
@@ -434,6 +448,7 @@ public class VisApplet extends PApplet {
     public void drawBars(float currentDay, float currentScale) {
         noStroke();
         textFont(font, NAME_FONT_SIZE);
+        JSONObject runs = metadata.getJSONObject("runs");
         for (Speedrunner sr : runnerArray) {
             // get base values
             float val = linIndex(sr.values, currentDay);
@@ -447,6 +462,10 @@ public class VisApplet extends PApplet {
             if (y > S_HEIGHT) {
                 continue;
             }
+            int runIndex = sr.runIndex[dIndex];
+            if (runIndex == -1) continue;
+            JSONObject run = runs.getJSONObject(sr.runs.get(runIndex));
+
             String timeText = sr.displayValues[dIndex];
             if (timeText.isEmpty()) {
                 continue;
@@ -500,11 +519,12 @@ public class VisApplet extends PApplet {
             }
 
             textAlign(LEFT, TOP);
-            int commentIndex = sr.commentIndex[dIndex];
-            if (commentIndex != -1) {
-                String comment = sr.comments.get(commentIndex);
+            if (!run.isNull("comment")) {
+                String[] mComment = run.getString("comment").split("\r?\n");
+                String comment = mComment[0];
+                if (mComment.length > 1) comment += " [...]";
                 textSize(COMMENT_FONT_SIZE);
-                text(comment, origTextX, y+BAR_HEIGHT+2);
+                text(comment, origTextX, y + BAR_HEIGHT + 2);
             }
 
             textSize(NAME_FONT_SIZE);
@@ -535,7 +555,123 @@ public class VisApplet extends PApplet {
                 textSize(NAME_FONT_SIZE);
                 text(others, timeX - mOffset, timeY);
             }
+
+            textAlign(LEFT, CENTER);
+            textSize(NAME_FONT_SIZE * (2f/3f));
+            fill(DARK_GRAY_COLOR);
+            int platX = x+8;
+            text(getPlatformDisplay(run), platX, y+BAR_HEIGHT_HALF);
         }
+    }
+
+    public static String getShortPlatform(String platform) {
+        switch (platform) {
+            case "Nintendo 64":
+                platform = "N64";
+                break;
+            case "Wii Virtual Console":
+                platform = "Wii VC";
+                break;
+            case "Wii U Virtual Console":
+                platform = "Wii U VC";
+                break;
+            case "3DO Interactive Multiplayer":
+                platform = "3DO";
+                break;
+            case "Amazon Fire TV":
+                platform = "FireTV";
+                break;
+            case "New Nintendo 3DS":
+                platform = "New 3DS";
+                break;
+            case "New Nintendo 3DS Virtual Console":
+                platform = "New 3DS VC";
+                break;
+            case "Nintendo 3DS":
+                platform = "3DS";
+                break;
+            case "Nintendo 3DS Virtual Console":
+                platform = "3DS VC";
+                break;
+            case "Nintendo DS":
+                platform = "DS";
+                break;
+            case "Nintendo Entertainment System":
+                platform = "NES";
+                break;
+            case "Super Nintendo":
+                platform = "SNES";
+                break;
+            case "Switch Virtual Console":
+                platform = "Switch VC";
+                break;
+            case "GameCube":
+                platform = "GC";
+                break;
+            case "PlayStation":
+                platform = "PSX";
+                break;
+            case "PlayStation 2":
+                platform = "PS2";
+                break;
+            case "PlayStation 3":
+                platform = "PS3";
+                break;
+            case "PlayStation 4":
+                platform = "PS4";
+                break;
+            case "PlayStation 4 Pro":
+                platform = "PS4 Pro";
+                break;
+            case "PlayStation 5":
+                platform = "PS5";
+                break;
+            case "Playstation Now":
+                platform = "PSNow";
+                break;
+            case "Playstation TV":
+                platform = "PSTV";
+                break;
+            case "PlayStation Vita":
+                platform = "PSVita";
+                break;
+            case "PlayStation Portable":
+                platform = "PSP";
+                break;
+            case "Xbox 360":
+                platform = "X360";
+                break;
+            case "Xbox 360 Arcade":
+                platform = "X360 Arcade";
+                break;
+            case "Xbox One":
+                platform = "XBO";
+                break;
+            case "Xbox One S":
+                platform = "XBOS";
+                break;
+            case "Xbox One X":
+                platform = "XBOX";
+                break;
+            case "Xbox Series S":
+                platform = "XBSS";
+                break;
+            case "Xbox Series X":
+                platform = "XBSX";
+                break;
+        }
+        return platform;
+    }
+
+    public static String getPlatformDisplay(JSONObject run) {
+        StringBuilder stringBuilder = new StringBuilder();
+        if (!run.isNull("region")) stringBuilder.append(run.getString("region").split(" / ")[0]);
+        if (!run.isNull("platform")) {
+            if (!stringBuilder.toString().isEmpty()) stringBuilder.append(' ');
+            stringBuilder.append(run.getString("platform"));
+        }
+        if (run.getBoolean("emulated")) stringBuilder.append(" emu");
+        return stringBuilder.toString();
     }
 
     public static void main(String[] args) {

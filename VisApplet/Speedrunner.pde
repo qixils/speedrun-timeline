@@ -5,7 +5,9 @@ import processing.data.JSONObject;
 import java.awt.*;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
+
 
 public class Speedrunner implements Comparable<Speedrunner> {
     protected static final String COLOR_TYPE_NAME = "dark"; // can be "light"
@@ -16,11 +18,12 @@ public class Speedrunner implements Comparable<Speedrunner> {
     public final int[] ranks;
     private final String displayName;
     private final Color clr;
-    public final List<String> comments = new ArrayList<String>();
-    public final int[] commentIndex;
+    public final List<String> runs = new ArrayList<String>();
+    public final int[] runIndex;
     private final PImage pImage;
     private int sortValue = -1;
-    public Speedrunner(String runnerID, JSONArray playerInfo, int dataLength, PImage pImage) {
+    private PImage flag = null;
+    public Speedrunner(String runnerID, JSONArray playerInfo, int dataLength, PImage pImage, Map<String, PImage> flags) {
         uuid = runnerID;
         this.playerInfo = playerInfo;
         this.pImage = pImage;
@@ -28,16 +31,37 @@ public class Speedrunner implements Comparable<Speedrunner> {
         values = new float[dataLength];
         ranks = new int[dataLength];
         displayValues = new String[dataLength];
-        commentIndex = new int[dataLength];
+        runIndex = new int[dataLength];
         for (int i = 0; i < dataLength; i++) {
             values[i] = 0;
             ranks[i] = VisApplet.DISPLAY_RANKS+1;
             displayValues[i] = "";
-            commentIndex[i] = -1;
+            runIndex[i] = -1;
         }
 
         displayName = initDisplayName();
         clr = initColor();
+        flag = initFlag(flags);
+    }
+
+    private PImage initFlag(Map<String, PImage> flags) {
+        String flagCode = null;
+        for (int i = 0; i < playerInfo.size(); i++) {
+            JSONObject playerObject = playerInfo.getJSONObject(i);
+            if (!playerObject.hasKey("location") || playerObject.isNull("location")) return null;
+            String playerCode = playerObject.getJSONObject("location").getJSONObject("country").getString("code");
+            if (flagCode != null && !playerCode.equals(flagCode)) return null;
+            flagCode = playerCode;
+        }
+        return flags.getOrDefault(flagCode, null);
+    }
+
+    public PImage getFlag() {
+        return flag;
+    }
+
+    public void setFlag(PImage flag) {
+        this.flag = flag;
     }
 
     public Float getValueForSort() {

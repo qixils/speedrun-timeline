@@ -22,6 +22,21 @@ countries = []
 checked_countries = []
 
 
+def download_flag(country: str):
+    if country not in checked_countries:
+        checked_countries.append(country)
+        dest = os.path.join(country_dir, country+".png")
+        if os.path.exists(dest):
+            countries.append(country)
+        else:
+            with requests.get(f"https://www.countryflags.io/{country}/flat/64.png", stream=True) as r:
+                if r.status_code == 200:
+                    with open(dest, 'wb') as f:
+                        for c in r.iter_content(1024):
+                            f.write(c)
+                        countries.append(country)
+
+
 class WebError(Exception):
     __slots__ = {"status_code", "payload"}
 
@@ -62,6 +77,14 @@ class Speedrun:
         self.author_uuid = ''.join(map(get_id, sorted(self.authors, key=get_id)))
         self.author_names = [(x['names']['international'] if x['rel'] == 'user' else x['name']) for x in self.authors]
 
+        self.region = None
+        if run['region']['data']:
+            self.region = run['region']['data']['name']
+        self.platform = None
+        if run['platform']['data']:
+            self.platform = run['platform']['data']['name']
+        self.emulated = run['system']['emulated']
+
         self.performed = None
         self._set_time()
 
@@ -73,18 +96,7 @@ class Speedrun:
         for auth in self.authors:
             if 'location' in auth and auth['location'] is not None:
                 country = auth['location']['country']['code']
-                if country not in checked_countries:
-                    checked_countries.append(country)
-                    dest = os.path.join(country_dir, country+".png")
-                    if os.path.exists(dest):
-                        countries.append(country)
-                    else:
-                        with requests.get(f"https://www.countryflags.io/{country}/flat/64.png", stream=True) as r:
-                            if r.status_code == 200:
-                                with open(dest, 'wb') as f:
-                                    for c in r.iter_content(1024):
-                                        f.write(c)
-                                    countries.append(country)
+                download_flag(country)
 
         # this code really shouldn't be here but i'm lazy
         if self.author_uuid not in checked_pfps:
@@ -269,7 +281,7 @@ def main():
     while True:
         try:
             _max = 200
-            _runs = fetch("runs", {"category": category['id'], "status": "verified", "max": _max, "offset": offset, "embed": "players"})
+            _runs = fetch("runs", {"category": category['id'], "status": "verified", "max": _max, "offset": offset, "embed": "players,platform,region"})
             offset += _max
             runs += _runs
         except WebError as e:
@@ -331,7 +343,10 @@ def main():
                 srunmap[run.id] = {
                     "time": run.human_time,
                     "time_t": run.time,
-                    "comment": run.comment
+                    "comment": run.comment,
+                    "region": run.region,
+                    "platform": run.platform,
+                    "emulated": run.emulated
                 }
             w.writerow(out)
             _day += _inc

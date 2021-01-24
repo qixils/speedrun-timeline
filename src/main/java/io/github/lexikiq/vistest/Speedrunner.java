@@ -20,8 +20,8 @@ public class Speedrunner implements Comparable<Speedrunner> {
     public final int[] ranks;
     private final String displayName;
     private final Color clr;
-    public final List<String> comments = new ArrayList<String>();
-    public final int[] commentIndex;
+    public final List<String> runs = new ArrayList<String>();
+    public final int[] runIndex;
     private final PImage pImage;
     private int sortValue = -1;
     private PImage flag = null;
@@ -33,12 +33,12 @@ public class Speedrunner implements Comparable<Speedrunner> {
         values = new float[dataLength];
         ranks = new int[dataLength];
         displayValues = new String[dataLength];
-        commentIndex = new int[dataLength];
+        runIndex = new int[dataLength];
         for (int i = 0; i < dataLength; i++) {
             values[i] = 0;
             ranks[i] = VisApplet.DISPLAY_RANKS+1;
             displayValues[i] = "";
-            commentIndex[i] = -1;
+            runIndex[i] = -1;
         }
 
         displayName = initDisplayName();
