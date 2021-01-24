@@ -104,6 +104,11 @@ class Speedrun:
             if self._get_avatar():
                 pfps.append(self.author_uuid)
 
+        if 'category_name' in run:
+            self.category = run['category_name']
+        else:
+            self.category = run['category']
+
     def _set_time(self):
         if 'kn04ewol' in self.raw_data['values'] and self.raw_data['values']['kn04ewol'] == '4qyxop3l':
             # silly hack-fix to ignore "unverified" runs on sm64 leaderboards
@@ -245,7 +250,7 @@ def main():
     # get game
     conf = False
     while not conf:
-        games: typing.List[dict] = get_input("Please enter the game name or abbreviation.", "games", ("abbreviation", "name"), True, 5)
+        games: typing.List[dict] = get_input("Please enter the game name or abbreviation.", "games", ("abbreviation", "name"), False, 5)
         if len(games) > 1:
             game_names = [x['names']['international'] for x in games]
             game = list_input("Please select the game from the list.", game_names, 1, games)
@@ -256,7 +261,7 @@ def main():
 
     # get category
     game_id = game['id']
-    categories = fetch(f"games/{game_id}/categories")
+    categories = list(filter(lambda x: x['type'] == "per-game", fetch(f"games/{game_id}/categories")))
     if len(categories) == 0:
         print("No categories found.")
         return
@@ -277,18 +282,22 @@ def main():
     # fun pagination time !
     print("Fetching runs, please wait...")
     runs = []
-    offset = 0
-    while True:
-        try:
-            _max = 200
-            _runs = fetch("runs", {"category": category['id'], "status": "verified", "max": _max, "offset": offset, "embed": "players,platform,region"})
-            offset += _max
-            runs += _runs
-        except WebError as e:
-            if e.status_code == 9000:
-                break
-            else:
-                raise e
+    cats = map(lambda x: fetch(f"categories/{x}"), ["7dgrrxk4", "n2y55mko", "7kjpp4k3", "xk9gg6d0", "7kjrxx42", "7dggqwxd", "vdoq6z9k"])
+    for c in cats:
+        offset = 0
+        while True:
+            try:
+                _max = 200
+                _runs = fetch("runs", {"category": c['id'], "status": "verified", "max": _max, "offset": offset, "embed": "players,platform,region"})
+                offset += _max
+                for r in _runs:
+                    r['category_name'] = c['name']
+                runs += _runs
+            except WebError as e:
+                if e.status_code == 9000:
+                    break
+                else:
+                    raise e
 
     if len(runs) == 0:
         print("No runs found.")
@@ -309,7 +318,7 @@ def main():
         runner_dict[r.author_uuid] = auths
 
     # download cover
-    c_url = "https://www.speedrun.com/themes/{}/cover-256.png?version=".format(game['abbreviation'])
+    c_url = game['assets']['cover-large']['uri']
     has_cover = False
     with requests.get(c_url, stream=True) as r:
         if r.status_code == 200:
@@ -346,7 +355,8 @@ def main():
                     "comment": run.comment,
                     "region": run.region,
                     "platform": run.platform,
-                    "emulated": run.emulated
+                    "emulated": run.emulated,
+                    "category": run.category
                 }
             w.writerow(out)
             _day += _inc

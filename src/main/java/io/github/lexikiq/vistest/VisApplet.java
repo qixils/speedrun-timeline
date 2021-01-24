@@ -29,9 +29,10 @@ public class VisApplet extends PApplet {
     public PImage coverImage = null;
     public PImage missingFlag;
 //    public VideoExport videoExport;
+    public String categoryName = CATEGORY;
 
     public PFont font;
-    public int frames = (int) (FRAMES_PER_DAY*365*4);
+    public int frames = 0;//(int) (FRAMES_PER_DAY*365*4);
     public JSONObject metadata;
 
     public static final String IMAGE_FOLDER = "pfps/";
@@ -39,12 +40,12 @@ public class VisApplet extends PApplet {
 
     public static final float FRAMES_PER_DAY = 3f;
     public static final int RANK_SMOOTHING = 4;
-    public static final int MIN_VALUE = 90*60; // minimum speedrun time
+    public static final int MIN_VALUE = 0; // minimum speedrun time
 
     public static final int S_WIDTH = 1920; // screen width
     public static final int S_HEIGHT = 1080; // screen height
     public static final int X_MIN = 80;
-    public static final int X_MAX = S_WIDTH-50;
+    public static final int X_MAX = S_WIDTH-150;
     public static final int Y_MIN = 200;
     public static final int Y_MAX = S_HEIGHT-25;
     public static final int WIDTH = X_MAX-X_MIN; // drawing width
@@ -70,6 +71,8 @@ public class VisApplet extends PApplet {
     public static final int NAME_TEXT_OFFSET = 14;
     public static final int IMAGE_PADDING = 4;
     public static final int FLAG_DIMENSIONS = BAR_HEIGHT-IMAGE_PADDING;
+    public static final int MULTI_CATEGORY_MIN = 450;
+    public static final int MULTI_CATEGORY_INCREMENT = 25;
 
     public static final float GRAY_COLOR = 204f;
     public static final float DARK_GRAY_COLOR = 85f;
@@ -81,7 +84,9 @@ public class VisApplet extends PApplet {
     public static final int TICK_FADE_SPEED = 3; // how fast the tick marks fade (not exactly in seconds)
 
 
-    public static final boolean USE_MILLISECONDS = false;
+    public static final boolean USE_MILLISECONDS = true;
+    public static final boolean MULTI_MODE = true; // whether multiple categories were used in the creation of the dataset
+    public static final String CATEGORY = "Any%";
 
     static {
         rand.setSeed(1152003);
@@ -108,7 +113,8 @@ public class VisApplet extends PApplet {
         }
 
         metadata = loadJSONObject("metadata.json");
-//        videoExport = new VideoExport(this, metadata.getString("game")+"-"+metadata.getString("category")+".mp4");
+        if (!MULTI_MODE) categoryName = metadata.getString("category");
+//        videoExport = new VideoExport(this, (metadata.getString("game")+"-"+categoryName+".mp4").replaceAll("[^A-Za-z0-9 \\-_]", "_"));
         if (metadata.getBoolean("cover")) coverImage = loadImage(IMAGE_FOLDER+"_cover.png");
         List<String> pfps = Arrays.asList(metadata.getJSONArray("pfps").getStringArray());
         JSONObject players = metadata.getJSONObject("players");
@@ -125,7 +131,9 @@ public class VisApplet extends PApplet {
         for (Object playerObject : players.keys()) {
             String player = (String) playerObject;
             PImage img = null;
-            if (pfps.contains(player)) img = loadImage(IMAGE_FOLDER+player+".png");
+            try {
+                if (pfps.contains(player)) img = loadImage(IMAGE_FOLDER + player + ".png");
+            } catch (Exception ignored ){}
             Speedrunner speedrunner = new Speedrunner(player, players.getJSONArray(player), DATA_LENGTH, img, flags);
             if (speedrunner.getFlag() == null) {
                 speedrunner.setFlag(missingFlag);
@@ -323,7 +331,8 @@ public class VisApplet extends PApplet {
 //            videoExport.saveFrame();
         } catch (ArrayIndexOutOfBoundsException e) {
 //            videoExport.endMovie();
-            exit();
+            e.printStackTrace();
+//            exit();
         }
 
         frames++;
@@ -355,7 +364,6 @@ public class VisApplet extends PApplet {
 
         // game + category
         String game = metadata.getString("game");
-        String category = metadata.getString("category");
 
         textAlign(LEFT, BASELINE);
         textSize(DATE_FONT_SIZE);
@@ -364,7 +372,7 @@ public class VisApplet extends PApplet {
         int categoryX = (int) (textWidth(game)+16+textX);
         textSize(DATE_FONT_SIZE * (2f/3f));
         fill(GRAY_COLOR); // 0.8f * 255
-        text(category, categoryX, TITLE_TOP_MARGIN);
+        text(categoryName, categoryX, TITLE_TOP_MARGIN);
 
         // 1st 2nd etc
         int pX = X_MIN-6;
@@ -406,7 +414,7 @@ public class VisApplet extends PApplet {
             boolean firstMark = v == 0;
             if (firstMark) continue;
 
-            float x = valueToX(v, currentScale);
+            int x = jitterFix(valueToX(v, currentScale));
 
             float W = 4; // width of the bar
             float Wh = W/2f; // half of the width of the bar
@@ -425,11 +433,23 @@ public class VisApplet extends PApplet {
 
     public static String displayTime(float seconds, boolean useMilliseconds, boolean useSeconds, boolean useHours) {
         int h = (int) ((seconds/60)/60);
-        String out = String.format("%dh %02dm %06.3fs", h, (int) ((seconds/60) % 60), seconds%60);
-        if (!useMilliseconds && useSeconds) out = out.substring(0, out.length()-5)+"s";
-        if (!useSeconds) out = out.substring(0, out.length()-8);
-        if (!useHours || h == 0) out = out.substring(out.indexOf(" "));
-        return out;
+        Object[] args = {h, (int) ((seconds/60) % 60), seconds%60};
+        String outH = "%dh %02dm ";
+        if (!useHours || h == 0) {
+            args = Arrays.copyOfRange(args, 1, args.length);
+            outH = "%dm ";
+        }
+        String outS = "";
+        if (useSeconds) {
+            if (useMilliseconds) {
+                outS = "%06.3fs";
+            } else {
+                outS = "%02ds";
+                int i = args.length-1;
+                args[i] = floor((Float) args[i]);
+            }
+        }
+        return String.format(outH+outS, args);
     }
 
     public static String displayDays(int days) {
@@ -524,6 +544,7 @@ public class VisApplet extends PApplet {
                 textX += maxDim + 6; // offset username text
             }
 
+            // run comment
             textAlign(LEFT, TOP);
             if (!run.isNull("comment")) {
                 String[] mComment = run.getString("comment").split("\r?\n");
@@ -535,17 +556,30 @@ public class VisApplet extends PApplet {
 
             textSize(NAME_FONT_SIZE);
 
+            // runner name
             textAlign(LEFT);
             fill(255);
             String displayName = sr.getDisplayName();
             text(displayName, textX, textY);
             int nameWidth = (int) textWidth(displayName);
 
+            // runner flag
             int flagX = textX+nameWidth+4;
             image(sr.getFlag(), flagX, y+IMAGE_PADDING-2, FLAG_DIMENSIONS, FLAG_DIMENSIONS);
 
+            // draw category if in multi category mode
+            if (MULTI_MODE) {
+                int categoryGoalX = flagX+FLAG_DIMENSIONS+32;
+                int categoryX = X_MIN+MULTI_CATEGORY_MIN;
+                while (categoryX < categoryGoalX) categoryX+=MULTI_CATEGORY_INCREMENT;
+                fill(255, 255, 255, 200);
+                text(run.getString("category"), categoryX, textY+3);
+            }
+
+            fill(255);
             textAlign(RIGHT);
 
+            // draw time w/ small milliseconds
             int timeX = x-4;
             int timeY = textY+3;
             if (!USE_MILLISECONDS) {

@@ -9,3 +9,5 @@ ffmpeg.*
 *.mp4
 *.autosave
 VisApplet/data/
+metadata.json
+runs.csv
