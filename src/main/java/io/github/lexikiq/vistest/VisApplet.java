@@ -31,7 +31,7 @@ public class VisApplet extends PApplet {
 //    public VideoExport videoExport;
 
     public PFont font;
-    public int frames = (int) (FRAMES_PER_DAY*365*7);
+    public int frames = (int) (FRAMES_PER_DAY*365*4);
     public JSONObject metadata;
 
     public static final String IMAGE_FOLDER = "pfps/";
@@ -64,6 +64,7 @@ public class VisApplet extends PApplet {
     public static final int DATE_FONT_SIZE = 96;
     public static final int COMMENT_FONT_SIZE = 24;
 
+    public static final int PLATFORM_MARGIN = 8;
     public static final int TITLE_TOP_MARGIN = 96;
     public static final int TITLE_SIDE_MARGIN = 20;
     public static final int NAME_TEXT_OFFSET = 14;
@@ -473,6 +474,8 @@ public class VisApplet extends PApplet {
                 continue;
             }
 
+            int platX = x+PLATFORM_MARGIN; // platform value, added here so the tri code can increment it
+
             // bar fill color
             Color srClr = sr.getClr();
             fill(srClr.getRed(), srClr.getGreen(), srClr.getBlue());
@@ -480,6 +483,7 @@ public class VisApplet extends PApplet {
             // draw triangle for runs that would go off the screen
             if (x > X_MAX) {
                 x = BAR_MAX_X;
+                platX = BAR_MAX_X+TRIANGLE_SIZE+PLATFORM_MARGIN;
                 triangle(BAR_MAX_X, y, BAR_MAX_X, y+BAR_HEIGHT, BAR_MAX_X+TRIANGLE_SIZE, y+BAR_HEIGHT_HALF);
             }
 
@@ -561,7 +565,7 @@ public class VisApplet extends PApplet {
             textAlign(LEFT, CENTER);
             textSize(NAME_FONT_SIZE * (2f/3f));
             fill(DARK_GRAY_COLOR);
-            int platX = x+8;
+
             text(getPlatformDisplay(run), platX, y+BAR_HEIGHT_HALF);
         }
     }

@@ -468,6 +468,8 @@ public void drawBars(float currentDay, float currentScale) {
             continue;
         }
 
+        int platX = x+PLATFORM_MARGIN; // platform value, added here so the tri code can increment it
+
         // bar fill color
         Color srClr = sr.getClr();
         fill(srClr.getRed(), srClr.getGreen(), srClr.getBlue());
@@ -475,6 +477,7 @@ public void drawBars(float currentDay, float currentScale) {
         // draw triangle for runs that would go off the screen
         if (x > X_MAX) {
             x = BAR_MAX_X;
+            platX = BAR_MAX_X+TRIANGLE_SIZE+PLATFORM_MARGIN;
             triangle(BAR_MAX_X, y, BAR_MAX_X, y+BAR_HEIGHT, BAR_MAX_X+TRIANGLE_SIZE, y+BAR_HEIGHT_HALF);
         }
 
@@ -556,7 +559,7 @@ public void drawBars(float currentDay, float currentScale) {
         textAlign(LEFT, CENTER);
         textSize(NAME_FONT_SIZE * (2f/3f));
         fill(DARK_GRAY_COLOR);
-        int platX = x+8;
+
         text(getPlatformDisplay(run), platX, y+BAR_HEIGHT_HALF);
     }
 }
