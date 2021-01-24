@@ -114,7 +114,7 @@ public class VisApplet extends PApplet {
 
         metadata = loadJSONObject("metadata.json");
         if (!MULTI_MODE) categoryName = metadata.getString("category");
-//        videoExport = new VideoExport(this, (metadata.getString("game")+"-"+categoryName+".mp4").replaceAll("[^A-Za-z0-9 \\-_]", "_"));
+//        videoExport = new VideoExport(this, (metadata.getString("game")+"-"+categoryName).replaceAll("[^A-Za-z0-9 \\-_]", "_")+".mp4");
         if (metadata.getBoolean("cover")) coverImage = loadImage(IMAGE_FOLDER+"_cover.png");
         List<String> pfps = Arrays.asList(metadata.getJSONArray("pfps").getStringArray());
         JSONObject players = metadata.getJSONObject("players");
