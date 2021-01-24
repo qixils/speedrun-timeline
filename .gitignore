@@ -8,3 +8,4 @@ ffmpeg.*
 *.iml
 *.mp4
 *.autosave
+VisApplet/data/
