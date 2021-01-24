@@ -13,6 +13,8 @@ import java.time.ZoneId;
 import java.util.List;
 import java.util.*;
 
+//import com.hamoid.VideoExport;
+
 public class VisApplet extends PApplet {
     public final Map<String, Speedrunner> speedrunners = new HashMap<String, Speedrunner>(); // all speedrunners
     public final Map<String, PImage> flags = new HashMap<String, PImage>();

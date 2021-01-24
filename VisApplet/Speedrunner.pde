@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 
+import com.hamoid.VideoExport;
 
 public class Speedrunner implements Comparable<Speedrunner> {
     protected static final String COLOR_TYPE_NAME = "dark"; // can be "light"
