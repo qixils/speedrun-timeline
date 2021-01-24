@@ -1,22 +1,25 @@
 import base64
+import csv
+import json
 import os
-import re
 import typing
 from datetime import date
 from datetime import timedelta as td
 from hashlib import sha256
-import csv
 
 import requests
-import json
 from dateutil.parser import parse
 
 api = "https://www.speedrun.com/api/v1/"
 use_milliseconds = True
 use_hours = True
 download_avatars = True
-pfp_dir = "../data/pfps"
-pfps = {}
+pfp_dir = os.path.join("..", "data", "pfps")
+country_dir = os.path.join("..", "data", "flags")
+pfps = []
+checked_pfps = []
+countries = []
+checked_countries = []
 
 
 class WebError(Exception):
@@ -66,10 +69,28 @@ class Speedrun:
         if 'comment' in run:
             self.comment = run['comment']
 
-        if self.author_uuid not in pfps:
-            file = self._get_avatar()
-            if file is not None:
-                pfps[self.author_uuid] = file
+        # save flag
+        for auth in self.authors:
+            if 'location' in auth and auth['location'] is not None:
+                country = auth['location']['country']['code']
+                if country not in checked_countries:
+                    checked_countries.append(country)
+                    dest = os.path.join(country_dir, country+".png")
+                    if os.path.exists(dest):
+                        countries.append(country)
+                    else:
+                        with requests.get(f"https://www.countryflags.io/{country}/flat/64.png", stream=True) as r:
+                            if r.status_code == 200:
+                                with open(dest, 'wb') as f:
+                                    for c in r.iter_content(1024):
+                                        f.write(c)
+                                    countries.append(country)
+
+        # this code really shouldn't be here but i'm lazy
+        if self.author_uuid not in checked_pfps:
+            checked_pfps.append(self.author_uuid)
+            if self._get_avatar():
+                pfps.append(self.author_uuid)
 
     def _set_time(self):
         if 'kn04ewol' in self.raw_data['values'] and self.raw_data['values']['kn04ewol'] == '4qyxop3l':
@@ -83,26 +104,26 @@ class Speedrun:
         elif self.raw_data['status']['verify-date']:
             self.performed = parse(self.raw_data['status']['verify-date']).date()
 
-    def _get_avatar(self) -> str:
+    def _get_avatar(self) -> bool:
         if self.performed is None:
-            return None
+            return False
         if len(self.authors) != 1:
-            return None
+            return False
         if not download_avatars:
-            return None
+            return False
         if 'weblink' not in self.authors[0]:
-            return None
+            return False
         name = self.authors[0]['weblink'].split('/')[-1]
-        dest = os.path.join(pfp_dir, name + ".png")
+        dest = os.path.join(pfp_dir, self.author_uuid + ".png")
         if os.path.exists(dest):
-            return name
+            return True
         with requests.get(f"https://www.speedrun.com/themes/user/{name}/image.png?version=", stream=True) as r:
             if r.status_code != 200:
-                return None
+                return False
             with open(dest, 'wb') as f:
                 for c in r.iter_content(1024):
                     f.write(c)
-                return name
+                return True
 
     def __str__(self):
         return f"{self.human_time} by {' & '.join(self.author_names)} on {self.performed}"
@@ -126,7 +147,7 @@ def fetch(query: str, params: dict = None) -> typing.Union[typing.Dict, typing.L
     return data['data']
 
 
-def get_input(prompt: str, query: str, search_query: typing.Union[str, typing.Tuple, typing.List] = None, bulk: bool = False, values: int = None) -> dict:
+def get_input(prompt: str, query: str, search_query: typing.Union[str, typing.Tuple, typing.List] = None, bulk: bool = False, values: int = None) -> typing.List[dict]:
     """
     Attempts to fetch a page from the SRC API based on user input
     :param prompt: what you are asking the user to input
@@ -207,10 +228,12 @@ def list_input(prompt: str, options: typing.List, default: int = None, mappings:
 # global variables annoy me
 def main():
     os.makedirs(pfp_dir, exist_ok=True)
+    os.makedirs(country_dir, exist_ok=True)
+
     # get game
     conf = False
     while not conf:
-        games = get_input("Please enter the game name or abbreviation.", "games", ("abbreviation", "name"), True, 5)
+        games: typing.List[dict] = get_input("Please enter the game name or abbreviation.", "games", ("abbreviation", "name"), True, 5)
         if len(games) > 1:
             game_names = [x['names']['international'] for x in games]
             game = list_input("Please select the game from the list.", game_names, 1, games)
@@ -273,8 +296,15 @@ def main():
                 del auth['signup']
         runner_dict[r.author_uuid] = auths
 
-    with open('players.json', 'w') as f:
-        json.dump(runner_dict, f)
+    # download cover
+    c_url = "https://www.speedrun.com/themes/{}/cover-256.png?version=".format(game['abbreviation'])
+    has_cover = False
+    with requests.get(c_url, stream=True) as r:
+        if r.status_code == 200:
+            has_cover = True
+            with open(os.path.join(pfp_dir, "_cover.png"), "wb") as f:
+                for c in r.iter_content(1024):
+                    f.write(c)
 
     print("Generating PB table")
 
@@ -315,7 +345,10 @@ def main():
             "game": game['names']['international'],
             "category": category['name'],
             "runs": srunmap,
-            "pfps": pfps
+            "players": runner_dict,
+            "pfps": pfps,
+            "cover": has_cover,
+            "flags": countries
         }, f)
 
 

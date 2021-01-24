@@ -7,27 +7,28 @@ import processing.data.JSONObject;
 import java.awt.*;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 
 
 public class Speedrunner implements Comparable<Speedrunner> {
-    protected static final ColorType COLOR_TYPE = ColorType.DARK;
-    protected static final String COLOR_TYPE_NAME = COLOR_TYPE.toString();
+    protected static final String COLOR_TYPE_NAME = "dark"; // can be "light"
     private final String uuid;
     private final JSONArray playerInfo;
     public final float[] values;
     public final String[] displayValues;
     public final int[] ranks;
     private final String displayName;
-    private final Color color;
+    private final Color clr;
     public final List<String> comments = new ArrayList<String>();
     public final int[] commentIndex;
-    private final PImage image;
+    private final PImage pImage;
     private int sortValue = -1;
-    public Speedrunner(String runnerID, JSONArray playerInfo, int dataLength, PImage image) {
+    private PImage flag = null;
+    public Speedrunner(String runnerID, JSONArray playerInfo, int dataLength, PImage pImage, Map<String, PImage> flags) {
         uuid = runnerID;
         this.playerInfo = playerInfo;
-        this.image = image;
+        this.pImage = pImage;
 
         values = new float[dataLength];
         ranks = new int[dataLength];
@@ -41,7 +42,28 @@ public class Speedrunner implements Comparable<Speedrunner> {
         }
 
         displayName = initDisplayName();
-        color = initColor();
+        clr = initColor();
+        flag = initFlag(flags);
+    }
+
+    private PImage initFlag(Map<String, PImage> flags) {
+        String flagCode = null;
+        for (int i = 0; i < playerInfo.size(); i++) {
+            JSONObject playerObject = playerInfo.getJSONObject(i);
+            if (!playerObject.hasKey("location") || playerObject.isNull("location")) return null;
+            String playerCode = playerObject.getJSONObject("location").getJSONObject("country").getString("code");
+            if (flagCode != null && !playerCode.equals(flagCode)) return null;
+            flagCode = playerCode;
+        }
+        return flags.getOrDefault(flagCode, null);
+    }
+
+    public PImage getFlag() {
+        return flag;
+    }
+
+    public void setFlag(PImage flag) {
+        this.flag = flag;
     }
 
     public Float getValueForSort() {
@@ -59,7 +81,8 @@ public class Speedrunner implements Comparable<Speedrunner> {
             boolean isUser = data.getString("rel").equals("user");
             String name;
             if (isUser) {
-                name = VisApplet.getFullName(data, true);
+                JSONObject uNames = data.getJSONObject("names");
+                name = uNames.getString("international");
             } else {
                 name = data.getString("name");
                 // get international name (pensive emoji)
@@ -90,8 +113,8 @@ public class Speedrunner implements Comparable<Speedrunner> {
 
     private Color initColor() {
         if (playerInfo.size() == 1 && playerInfo.getJSONObject(0).hasKey("name-style")) {
-            Color color = getUserColor();
-            float[] hsb = Color.RGBtoHSB(color.getRed(), color.getGreen(), color.getBlue(), null);
+            Color userColor = getUserColor();
+            float[] hsb = Color.RGBtoHSB(userColor.getRed(), userColor.getGreen(), userColor.getBlue(), null);
             hsb[1] = Math.max(hsb[1], 0.2f); // stops gray colors (i.e. pure white)
             return Color.getHSBColor(hsb[0], hsb[1], hsb[2]);
         } else {
@@ -126,12 +149,12 @@ public class Speedrunner implements Comparable<Speedrunner> {
         return this.displayName;
     }
 
-    public Color getColor() {
-        return this.color;
+    public Color getClr() {
+        return this.clr;
     }
 
-    public PImage getImage() {
-        return this.image;
+    public PImage getpImage() {
+        return this.pImage;
     }
 
     public int getSortValue() {

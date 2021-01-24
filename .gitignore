@@ -3,6 +3,8 @@ target/
 scripts/*.csv
 scripts/*.json
 pfps/
-ffmpeg.exe
+flags/
+ffmpeg.*
 *.iml
 *.mp4
+*.autosave

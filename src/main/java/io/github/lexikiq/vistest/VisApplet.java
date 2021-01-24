@@ -4,57 +4,88 @@ import processing.core.PApplet;
 import processing.core.PFont;
 import processing.core.PImage;
 import processing.data.JSONObject;
-//import com.hamoid.VideoExport;
 
 import java.awt.*;
+import java.io.File;
 import java.text.SimpleDateFormat;
 import java.time.LocalDate;
 import java.time.ZoneId;
-import java.util.*;
 import java.util.List;
+import java.util.*;
 
 public class VisApplet extends PApplet {
     public final Map<String, Speedrunner> speedrunners = new HashMap<String, Speedrunner>(); // all speedrunners
+    public final Map<String, PImage> flags = new HashMap<String, PImage>();
     public Speedrunner[] runnerArray;
     public int DATA_LENGTH; // how many dates/data entries there are
     public Date[] dates;
     public double[] maxes;
     public double[] unitChoices;
+    public int[] recordHolderDays;
+    public Speedrunner recordHolder = null;
+    public float dateTextWidth = 0;
+    public PImage coverImage = null;
+    public PImage missingFlag;
 //    public VideoExport videoExport;
 
     public PFont font;
-    public int frames = 0;//(int) (FRAMES_PER_DAY*365*7);
+    public int frames = 0;//(int) (FRAMES_PER_DAY*365*5);
     public JSONObject metadata;
 
-    public static final float FRAMES_PER_DAY = 2f;
+    public static final String IMAGE_FOLDER = "pfps/";
+    public static final String FLAG_FOLDER = "flags";
+
+    public static final float FRAMES_PER_DAY = 3f;
     public static final int RANK_SMOOTHING = 4;
+    public static final int MIN_VALUE = 90*60; // minimum speedrun time
+
     public static final int S_WIDTH = 1920; // screen width
     public static final int S_HEIGHT = 1080; // screen height
-    public static final int X_MIN = 50;
-    public static final int X_MAX = S_WIDTH-200;
+    public static final int X_MIN = 80;
+    public static final int X_MAX = S_WIDTH-50;
     public static final int Y_MIN = 200;
     public static final int Y_MAX = S_HEIGHT-25;
     public static final int WIDTH = X_MAX-X_MIN; // drawing width
     public static final int HEIGHT = Y_MAX-Y_MIN; // drawing height
+
     public static final int DISPLAY_RANKS = 10; // how many people to display (ie top 10)
+    public static final String[] PLACEMENTS = {"1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th", "9th", "10th", "11th", "12th", "13th", "14th", "15th", "16th", "17th", "18th", "19th", "20th"};
+    // public static final String TOP_RANKS_TEXT = "The fastest completions on";
+
+    public static final int TRIANGLE_SIZE = 20;
     public static final float BAR_PROPORTION = 0.7f; // how much space the bar should fill up as a percentage
     public static final int BAR_HEIGHT = (int) ((rankToY(1)-rankToY(0)) * BAR_PROPORTION);
-    public static final int MIN_VALUE = 90*60;
+    public static final int BAR_HEIGHT_HALF = BAR_HEIGHT/2;
+    public static final int BAR_MAX_X = X_MAX-TRIANGLE_SIZE;
+
     public static final int NAME_FONT_SIZE = 54;
     public static final int DATE_FONT_SIZE = 96;
     public static final int COMMENT_FONT_SIZE = 24;
-    public static final int TITLE_TOP_MARGIN = 96+16;
+
+    public static final int TITLE_TOP_MARGIN = 96;
+    public static final int TITLE_SIDE_MARGIN = 20;
+    public static final int NAME_TEXT_OFFSET = 14;
     public static final int IMAGE_PADDING = 4;
+    public static final int FLAG_DIMENSIONS = BAR_HEIGHT-IMAGE_PADDING;
+
+    public static final float GRAY_COLOR = 204f;
+    public static final float DARK_GRAY_COLOR = 85f;
     public static final SimpleDateFormat formatter = new SimpleDateFormat("MMM d, yyyy");
     public static final Random rand = new Random();
-    public static final int[] SCALE_UNITS = {1, 5, 10, 15, 30, 60, 120, 180, 300, 600, 900, 1800, 3600, 7200, 10800, 18000, 36000, 86400, 172800};
+
+    public static final int[] SCALE_UNITS = {1, 5, 10, 15, 30, 60, 120, 180, 300, 600, 900, 1800, 3600, 7200, 10800, 18000, 36000, 86400, 172800}; // possible increments for tick marks (in seconds)
     public static final int UNITS_GOAL = 3; // how many units we'd like to fit on screen
-    public static final int BAR_FADE_SPEED = 3; // how fast the tick marks fade (not exactly in seconds)
+    public static final int TICK_FADE_SPEED = 3; // how fast the tick marks fade (not exactly in seconds)
+
 
     public static final boolean USE_MILLISECONDS = false;
 
     static {
         rand.setSeed(1152003);
+    }
+
+    public static String dateToString(Date date) {
+        return formatter.format(date);
     }
 
     public void settings() { // diet setup
@@ -63,16 +94,27 @@ public class VisApplet extends PApplet {
 
     public void setup() {
         frameRate(60);
-//        videoExport = new VideoExport(this, "output.mp4");
-        font = loadFont("Jygquif1-96.vlw");
-        metadata = loadJSONObject("metadata.json");
-        JSONObject pfps = metadata.getJSONObject("pfps");
-        JSONObject players = loadJSONObject("players.json");
+        missingFlag = loadImage("missing_flag.png");
+        font = loadFont("UbuntuCondensed-Regular-96.vlw");//"Jygquif1-96.vlw");
         String[] textFile = loadStrings("runs.csv");
+
+        for (File file : listFiles(sketchPath("data")+"\\"+FLAG_FOLDER)) {
+            String filename = file.getName();
+            String country = filename.substring(0, filename.lastIndexOf('.'));
+            flags.put(country, loadImage(file.getAbsolutePath()));
+        }
+
+        metadata = loadJSONObject("metadata.json");
+//        videoExport = new VideoExport(this, metadata.getString("game")+"-"+metadata.getString("category")+".mp4");
+        if (metadata.getBoolean("cover")) coverImage = loadImage(IMAGE_FOLDER+"_cover.png");
+        List<String> pfps = Arrays.asList(metadata.getJSONArray("pfps").getStringArray());
+        JSONObject players = metadata.getJSONObject("players");
+
         DATA_LENGTH = textFile.length - 1;
         maxes = new double[DATA_LENGTH];
         unitChoices = new double[DATA_LENGTH];
         dates = new Date[DATA_LENGTH];
+        recordHolderDays = new int[DATA_LENGTH];
         runnerArray = new Speedrunner[players.keys().size()];
 
         // create speedrunner objects
@@ -80,8 +122,11 @@ public class VisApplet extends PApplet {
         for (Object playerObject : players.keys()) {
             String player = (String) playerObject;
             PImage img = null;
-            if (pfps.hasKey(player)) img = loadImage("pfps/"+pfps.getString(player)+".png");
-            Speedrunner speedrunner = new Speedrunner(player, players.getJSONArray(player), DATA_LENGTH, img);
+            if (pfps.contains(player)) img = loadImage(IMAGE_FOLDER+player+".png");
+            Speedrunner speedrunner = new Speedrunner(player, players.getJSONArray(player), DATA_LENGTH, img, flags);
+            if (speedrunner.getFlag() == null) {
+                speedrunner.setFlag(missingFlag);
+            }
             speedrunners.put(player, speedrunner);
             runnerArray[c] = speedrunner;
             c++;
@@ -89,6 +134,12 @@ public class VisApplet extends PApplet {
 
         initUserData(textFile);
         initUnits();
+
+        // find size of date text to get the offset for the "the fastest speedruns on..." text
+        textFont(font, DATE_FONT_SIZE);
+        for (Date date : dates) {
+            dateTextWidth = max(textWidth(dateToString(date)), dateTextWidth);
+        }
 
 //        videoExport.startMovie();
     }
@@ -151,11 +202,22 @@ public class VisApplet extends PApplet {
             Collections.sort(runners);
             // update ranks
             int maxValueAt = Math.min(runners.size(), DISPLAY_RANKS)-1;
+            double previousMax = -1;
+            if (i > 1) previousMax = maxes[i-2];
             for (int c = 0; c < runners.size() && c < DISPLAY_RANKS; c++) {
                 Speedrunner runner = runners.get(c);
-                runner.ranks[i - 1] = c;
+                runner.ranks[i-1] = c;
+                double val = runner.values[i-1];
                 if (c <= maxValueAt) {
-                    maxes[i-1] = runner.values[i-1];
+                    if (previousMax != -1) val = Math.min(val, previousMax);
+                    maxes[i-1] = val;
+                }
+                if (c == 0) {
+                    if (recordHolder == null || recordHolder != runner) {
+                        recordHolder = runner;
+                    } else {
+                        recordHolderDays[i-1] = recordHolderDays[i-2]+1;
+                    }
                 }
             }
         }
@@ -236,43 +298,79 @@ public class VisApplet extends PApplet {
     public void draw() {
         float currentDayIndex = getDayFromFrames(frames);
         float currentScale = getXScale(currentDayIndex);
+        background(0);
         try {
-            drawBackground(currentDayIndex);
             drawHorizTickMarks(currentDayIndex, currentScale);
+            drawBackground(currentDayIndex);
             drawBars(currentDayIndex, currentScale);
 //            videoExport.saveFrame();
         } catch (ArrayIndexOutOfBoundsException e) {
 //            videoExport.endMovie();
-//            exit();
+            exit();
         }
 
         frames++;
     }
 
     public void drawBackground(float currentDay) {
-        background(0);
-        fill(255);
+        fill(255f);
         textFont(font, DATE_FONT_SIZE);
 
         // date
-        textAlign(RIGHT, BOTTOM);
-        text(formatter.format(dates[floor(currentDay)]), S_WIDTH-20, TITLE_TOP_MARGIN);
+        textAlign(RIGHT, BASELINE);
+        int dateX = S_WIDTH - TITLE_SIDE_MARGIN;
+        text(dateToString(dates[floor(currentDay)]), dateX, TITLE_TOP_MARGIN);
+
+        // "top X speedruns on..."
+        // fill(GRAY_COLOR);
+        // textSize(DATE_FONT_SIZE * (1f/3f));
+        // text(TOP_RANKS_TEXT, dateX-dateTextWidth-20, TITLE_TOP_MARGIN);
+        // fill(255f);
+
+        // cover img
+        int textX = TITLE_SIDE_MARGIN;
+        if (coverImage != null) {
+            float ratio = (float) DATE_FONT_SIZE/coverImage.pixelHeight;
+            int imgW = (int) (coverImage.pixelWidth * ratio);
+            image(coverImage, textX, TITLE_TOP_MARGIN-DATE_FONT_SIZE+20, imgW, DATE_FONT_SIZE);
+            textX += imgW+8;
+        }
 
         // game + category
         String game = metadata.getString("game");
         String category = metadata.getString("category");
 
-        textAlign(LEFT, BOTTOM);
-        text(game, X_MIN, TITLE_TOP_MARGIN);
+        textAlign(LEFT, BASELINE);
+        textSize(DATE_FONT_SIZE);
+        text(game, textX, TITLE_TOP_MARGIN);
 
-        int categoryX = (int) (textWidth(game)+8+X_MIN);
+        int categoryX = (int) (textWidth(game)+16+textX);
         textSize(DATE_FONT_SIZE * (2f/3f));
-        fill(204f); // 0.8f * 255
-        text(category, categoryX, TITLE_TOP_MARGIN-4);
+        fill(GRAY_COLOR); // 0.8f * 255
+        text(category, categoryX, TITLE_TOP_MARGIN);
+
+        // 1st 2nd etc
+        int pX = X_MIN-6;
+        fill(DARK_GRAY_COLOR);
+        textSize(NAME_FONT_SIZE*(2f/3f));
+        textAlign(RIGHT, CENTER);
+        for (int p = 0; p < DISPLAY_RANKS; p++) {
+            String pText = PLACEMENTS[p];
+            int pY = jitterFix(rankToY(p)) + BAR_HEIGHT_HALF;
+            text(pText, pX, pY);
+        }
+
+        // WR for ...
+        fill(0xFFFFE200);
+        textAlign(LEFT, BOTTOM);
+        int fontSize = (int) (NAME_FONT_SIZE * (3f/4f));
+        textSize(fontSize);
+        text("WR holder for", TITLE_SIDE_MARGIN, Y_MIN-fontSize);
+        text(displayDays(recordHolderDays[round(currentDay)]), TITLE_SIDE_MARGIN, Y_MIN);
     }
 
     public void drawHorizTickMarks(float currentDay, float currentScale) {
-        float preferredUnit = avgIndex(unitChoices, currentDay, BAR_FADE_SPEED);
+        float preferredUnit = avgIndex(unitChoices, currentDay, TICK_FADE_SPEED);
         int unitIndex = jitterFix(preferredUnit);
         int thisUnit = SCALE_UNITS[unitIndex];
         int nextUnit = SCALE_UNITS[unitIndex+1];
@@ -286,6 +384,9 @@ public class VisApplet extends PApplet {
 
     public void drawTickMarksOfUnit(int thisUnit, float currentScale, float opacity) {
         for (int v = 0; v < currentScale * 1.4; v+=thisUnit) {
+            boolean firstMark = v == 0;
+            if (firstMark) continue;
+
             float x = valueToX(v, currentScale);
 
             fill(100, 100, 100, opacity);
@@ -294,24 +395,35 @@ public class VisApplet extends PApplet {
             float yOffset = 20; // how far above the top of the screen to render
             rect(x-Wh, Y_MIN-yOffset, W, HEIGHT+yOffset);
 
-            boolean firstMark = v == 0;
-            int align = firstMark ? LEFT : CENTER;
-            if (firstMark) x -= 10;
+            int align = CENTER;
+            //int align = firstMark ? LEFT : CENTER;
+            //if (firstMark) x -= 10;
 
             textAlign(align);
             textFont(font, 50);
-            String display = displayTime(v+MIN_VALUE, false, true, true);
+            String display = displayTime(v+MIN_VALUE, false, false, true);
             text(display, x, Y_MIN-yOffset-10);
         }
     }
 
     public static String displayTime(float seconds, boolean useMilliseconds, boolean useSeconds, boolean useHours) {
         int h = (int) ((seconds/60)/60);
-        String out = String.format("%d:%02d:%06.3f", h, (int) ((seconds/60) % 60), seconds%60);
-        if (!useMilliseconds && useSeconds) out = out.substring(0, out.length()-4);
-        if (!useSeconds) out = out.substring(0, out.length()-7);
-        if (!useHours || h == 0) out = out.substring(2);
+        String out = String.format("%dh %02dm %06.3fs", h, (int) ((seconds/60) % 60), seconds%60);
+        if (!useMilliseconds && useSeconds) out = out.substring(0, out.length()-5)+"s";
+        if (!useSeconds) out = out.substring(0, out.length()-8);
+        if (!useHours || h == 0) out = out.substring(out.indexOf(" "));
         return out;
+    }
+
+    public static String displayDays(int days) {
+        int trueDays = days % 31;
+        int months = floor(days/31f) % 12;
+        int years = floor((days/31f)/12f);
+        StringBuilder output = new StringBuilder();
+        if (years > 0) output.append(years).append("y ");
+        if (months > 0 || years > 0) output.append(months).append("m ");
+        output.append(trueDays).append("d");
+        return output.toString();
     }
 
     public static int jitterFix(float f) {
@@ -323,26 +435,44 @@ public class VisApplet extends PApplet {
         noStroke();
         textFont(font, NAME_FONT_SIZE);
         for (Speedrunner sr : runnerArray) {
+            // get base values
             float val = linIndex(sr.values, currentDay);
             float fx = valueToX(val, currentScale);
             float rank = avgIndex(sr.ranks, currentDay, RANK_SMOOTHING);
             float fy = rankToY(rank);
             int x = jitterFix(fx);
             int y = jitterFix(fy);
+            int dIndex = round(currentDay); // get index for fixed data (comments, display time)
+            // skip if off screen
             if (y > S_HEIGHT) {
                 continue;
             }
+            String timeText = sr.displayValues[dIndex];
+            if (timeText.isEmpty()) {
+                continue;
+            }
 
-            Color color = sr.getColor();
-            fill(color.getRed(), color.getGreen(), color.getBlue());
+            // bar fill color
+            Color srClr = sr.getClr();
+            fill(srClr.getRed(), srClr.getGreen(), srClr.getBlue());
+
+            // draw triangle for runs that would go off the screen
+            if (x > X_MAX) {
+                x = BAR_MAX_X;
+                triangle(BAR_MAX_X, y, BAR_MAX_X, y+BAR_HEIGHT, BAR_MAX_X+TRIANGLE_SIZE, y+BAR_HEIGHT_HALF);
+            }
+
+            // draw bar
             rect(X_MIN, y, x - X_MIN, BAR_HEIGHT);
 
+            // set text position variables
             int textX = X_MIN + 6;
             int origTextX = textX;
-            int textY = y + BAR_HEIGHT - 12;
+            int textY = y+BAR_HEIGHT-NAME_TEXT_OFFSET;
 
-            PImage image = sr.getImage();
-            if (image != null){
+            // render profile picture
+            PImage pImage = sr.getpImage();
+            if (pImage != null){
                 // scale aspect ratios correctly (this might not be perfectly efficient)
                 int maxDim = BAR_HEIGHT - IMAGE_PADDING * 2;
 
@@ -352,73 +482,63 @@ public class VisApplet extends PApplet {
                 int wOffset = 0;
                 int hOffset = 0;
 
-                if (image.pixelHeight >= image.pixelWidth) {
+                if (pImage.pixelHeight >= pImage.pixelWidth) {
                     imgH = maxDim;
-                    ratio = (float) imgH / image.pixelHeight;
-                    imgW = (int) (image.pixelWidth * ratio);
+                    ratio = (float) imgH / pImage.pixelHeight;
+                    imgW = (int) (pImage.pixelWidth * ratio);
                     wOffset = (maxDim - imgW) / 2;
                 } else {
                     imgW = maxDim;
-                    ratio = (float) imgW / image.pixelWidth;
-                    imgH = (int) (image.pixelHeight * ratio);
+                    ratio = (float) imgW / pImage.pixelWidth;
+                    imgH = (int) (pImage.pixelHeight * ratio);
                     hOffset = (maxDim - imgH) / 2;
                 }
 
-                image(image, textX+wOffset, y+IMAGE_PADDING+hOffset, imgW, imgH);
-                textX += maxDim + 6;
+                // finally render img
+                image(pImage, textX+wOffset, y+IMAGE_PADDING+hOffset, imgW, imgH);
+                textX += maxDim + 6; // offset username text
             }
 
             textAlign(LEFT, TOP);
-            int commentIndex = sr.commentIndex[round(currentDay)];
+            int commentIndex = sr.commentIndex[dIndex];
             if (commentIndex != -1) {
                 String comment = sr.comments.get(commentIndex);
                 textSize(COMMENT_FONT_SIZE);
-                text(comment, origTextX, textY+16);
+                text(comment, origTextX, y+BAR_HEIGHT+2);
             }
 
             textSize(NAME_FONT_SIZE);
 
             textAlign(LEFT);
             fill(255);
-            text(sr.getDisplayName(), textX, textY);
+            String displayName = sr.getDisplayName();
+            text(displayName, textX, textY);
+            int nameWidth = (int) textWidth(displayName);
+
+            int flagX = textX+nameWidth+4;
+            image(sr.getFlag(), flagX, y+IMAGE_PADDING-2, FLAG_DIMENSIONS, FLAG_DIMENSIONS);
 
             textAlign(RIGHT);
-            text(sr.displayValues[round(currentDay)], x - 4, textY);
+
+            int timeX = x-4;
+            int timeY = textY+3;
+            if (!USE_MILLISECONDS) {
+                text(timeText, timeX, timeY);
+            } else {
+                int offset = timeText.length() - 4;
+                String others = timeText.substring(0, offset);
+                String millis = timeText.substring(offset);
+                textSize(NAME_FONT_SIZE * (1f / 2f));
+                text(millis, timeX, timeY);
+                int mOffset = (int) textWidth(millis);
+
+                textSize(NAME_FONT_SIZE);
+                text(others, timeX - mOffset, timeY);
+            }
         }
     }
 
     public static void main(String[] args) {
         PApplet.main("io.github.lexikiq.vistest.VisApplet");
-    }
-
-    /**
-     * For a translated object (i.e. one with a <code>names</code> attribute containing an <code>international</code> and <code>japanese</code> name), returns the full displayable text.
-     * Specifically, this returns either the International or Japanese name if only one is available.
-     * If both are available, it returns a string formatted like "English (Japanese)", with the order being determined by <code>japaneseFirst</code>.
-     *
-     * @param namedObject a JSONObject from the speedrun.com api containing a "names" attribute
-     * @param japaneseFirst whether or not to display Japanese names first
-     * @return displayable text
-     */
-    public static String getFullName(JSONObject namedObject, boolean japaneseFirst) {
-        JSONObject userNames = namedObject.getJSONObject("names");
-        return userNames.getString("international");
-
-        // my CJK JP font doesn't work so oh well
-//        if (userNames.isNull("japanese")) {
-//            return userNames.getString("international");
-//        }
-//        if (userNames.isNull("international")) {
-//            return userNames.getString("japanese");
-//        }
-//
-//        String[] args = new String[]{userNames.getString("japanese"), userNames.getString("international")};
-//        // swap if not japanese first
-//        if (!japaneseFirst) {
-//            String _temp = args[0];
-//            args[0] = args[1];
-//            args[1] = _temp;
-//        }
-//        return String.format("%s (%s)", args);
     }
 }
