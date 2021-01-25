@@ -32,7 +32,7 @@ public class VisApplet extends PApplet {
     public String categoryName = CATEGORY;
 
     public PFont font;
-    public int frames = 0;//(int) (FRAMES_PER_DAY*365*4);
+    public int frames = (int) (FRAMES_PER_DAY*365*5.7);
     public JSONObject metadata;
 
     public static final String IMAGE_FOLDER = "pfps/";
@@ -71,8 +71,8 @@ public class VisApplet extends PApplet {
     public static final int NAME_TEXT_OFFSET = 14;
     public static final int IMAGE_PADDING = 4;
     public static final int FLAG_DIMENSIONS = BAR_HEIGHT-IMAGE_PADDING;
-    public static final int MULTI_CATEGORY_MIN = 450;
     public static final int MULTI_CATEGORY_INCREMENT = 25;
+    public static final int MULTI_PADDING = 8;
 
     public static final float GRAY_COLOR = 204f;
     public static final float DARK_GRAY_COLOR = 85f;
@@ -441,12 +441,13 @@ public class VisApplet extends PApplet {
         }
         String outS = "";
         if (useSeconds) {
-            if (useMilliseconds) {
+            int i = args.length-1;
+            Float s = (Float) args[i];
+            if (useMilliseconds && (s % 1.0f) > 0f) {
                 outS = "%06.3fs";
             } else {
                 outS = "%02ds";
-                int i = args.length-1;
-                args[i] = floor((Float) args[i]);
+                args[i] = floor(s);
             }
         }
         return String.format(outH+outS, args);
@@ -567,25 +568,17 @@ public class VisApplet extends PApplet {
             int flagX = textX+nameWidth+4;
             image(sr.getFlag(), flagX, y+IMAGE_PADDING-2, FLAG_DIMENSIONS, FLAG_DIMENSIONS);
 
-            // draw category if in multi category mode
-            if (MULTI_MODE) {
-                int categoryGoalX = flagX+FLAG_DIMENSIONS+32;
-                int categoryX = X_MIN+MULTI_CATEGORY_MIN;
-                while (categoryX < categoryGoalX) categoryX+=MULTI_CATEGORY_INCREMENT;
-                fill(255, 255, 255, 200);
-                text(run.getString("category"), categoryX, textY+3);
-            }
-
+            // draw time w/ small milliseconds
             fill(255);
             textAlign(RIGHT);
-
-            // draw time w/ small milliseconds
             int timeX = x-4;
             int timeY = textY+3;
-            if (!USE_MILLISECONDS) {
+            int timeWidth;
+            if (!USE_MILLISECONDS || timeText.indexOf('.') == -1) {
                 text(timeText, timeX, timeY);
+                timeWidth = (int) textWidth(timeText);
             } else {
-                int offset = timeText.length() - 4;
+                int offset = timeText.length() - 5;
                 String others = timeText.substring(0, offset);
                 String millis = timeText.substring(offset);
                 textSize(NAME_FONT_SIZE * (1f / 2f));
@@ -593,13 +586,50 @@ public class VisApplet extends PApplet {
                 int mOffset = (int) textWidth(millis);
 
                 textSize(NAME_FONT_SIZE);
-                text(others, timeX - mOffset, timeY);
+                timeX -= mOffset;
+                text(others, timeX, timeY);
+                timeWidth = (int) textWidth(others);
+            }
+
+            // draw category if in multi category mode
+            if (MULTI_MODE) {
+                textAlign(LEFT);
+                float catSize = NAME_FONT_SIZE;
+                textSize(catSize);
+
+                // get position of text
+                int categoryGoalX = flagX+FLAG_DIMENSIONS+MULTI_PADDING;
+                int categoryX = X_MIN;
+                while (categoryX < categoryGoalX) categoryX+=MULTI_CATEGORY_INCREMENT;
+
+                // ensure time doesn't overlap
+                String catText = run.getString("category");
+                int multiWidth = (int) textWidth(catText);
+                int maxCatValue = timeX - timeWidth;
+                // find offset from time value on right hand
+                while (categoryX + multiWidth > maxCatValue) {
+                    categoryX -= MULTI_CATEGORY_INCREMENT;
+                }
+                // ensure padding on left side as well
+                categoryX = max(categoryGoalX, categoryX);
+                // shrink text size if too large
+                while (categoryX + textWidth(catText) > maxCatValue) {
+                    if (maxCatValue >= categoryX || catSize < 8f) {
+                        catSize = 0f;
+                        break;
+                    }
+                    catSize *= (3f/4f);
+                    textSize(catSize);
+                }
+                if (catSize > 0) {
+                    fill(255, 255, 255, 200);
+                    text(catText, categoryX, textY + 3);
+                }
             }
 
             textAlign(LEFT, CENTER);
             textSize(NAME_FONT_SIZE * (2f/3f));
             fill(DARK_GRAY_COLOR);
-
             text(getPlatformDisplay(run), platX, y+BAR_HEIGHT_HALF);
         }
     }
