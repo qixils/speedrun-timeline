@@ -375,7 +375,7 @@ def main():
     # fun pagination time !
     print("Fetching runs, please wait...")
     runs = []
-    cats = map(lambda x: fetch(f"categories/{x}"), ["7dgrrxk4", "n2y55mko", "7kjpp4k3", "xk9gg6d0", "7kjrxx42", "7dggqwxd", "vdoq6z9k"])
+    cats = map(lambda x: fetch(f"categories/{x}"), ["wkpoo02r", "7dgrrxk4", "n2y55mko", "7kjpp4k3", "xk9gg6d0", "7kjrxx42", "7dggqwxd", "vdoq6z9k"])
     for c in cats:
         offset = 0
         while True:
