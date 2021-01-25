@@ -29,7 +29,7 @@ public VideoExport videoExport;
 public String categoryName = CATEGORY;
 
 public PFont font;
-public int frames = (int) (FRAMES_PER_DAY*365*5.7);
+public int frames = 0;//(int) (FRAMES_PER_DAY*365*5.7);
 public JSONObject metadata;
 
 public static final String IMAGE_FOLDER = "pfps/";
