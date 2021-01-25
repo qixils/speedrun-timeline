@@ -68,8 +68,8 @@ public static final int TITLE_SIDE_MARGIN = 20;
 public static final int NAME_TEXT_OFFSET = 14;
 public static final int IMAGE_PADDING = 4;
 public static final int FLAG_DIMENSIONS = BAR_HEIGHT-IMAGE_PADDING;
-public static final int MULTI_CATEGORY_INCREMENT = 25;
-public static final int MULTI_PADDING = 8;
+public static final int MULTI_PADDING = 50;
+public static final int MULTI_MIN_PADDING = 16;
 
 public static final float GRAY_COLOR = 204f;
 public static final float DARK_GRAY_COLOR = 85f;
@@ -595,29 +595,27 @@ public void drawBars(float currentDay, float currentScale) {
             textSize(catSize);
 
             // get position of text
-            int categoryGoalX = flagX+FLAG_DIMENSIONS+MULTI_PADDING;
-            int categoryX = X_MIN;
-            while (categoryX < categoryGoalX) categoryX+=MULTI_CATEGORY_INCREMENT;
+            int categoryX = flagX+FLAG_DIMENSIONS+MULTI_PADDING;
 
-            // ensure time doesn't overlap
+            // ensure time doesn't overlap the time text
             String catText = run.getString("category");
-            int multiWidth = (int) textWidth(catText);
-            int maxCatValue = timeX - timeWidth;
-            // find offset from time value on right hand
-            while (categoryX + multiWidth > maxCatValue) {
-                categoryX -= MULTI_CATEGORY_INCREMENT;
+            int maxCatValue = timeX - timeWidth - MULTI_PADDING;
+            // center text with smaller margins if text overlaps with time
+            if (categoryX + textWidth(catText) > maxCatValue) {
+                textAlign(CENTER);
+                maxCatValue = timeX - timeWidth - MULTI_MIN_PADDING;
+                categoryX = (maxCatValue+flagX+FLAG_DIMENSIONS+MULTI_MIN_PADDING)/2;
             }
-            // ensure padding on left side as well
-            categoryX = max(categoryGoalX, categoryX);
-            // shrink text size if too large
-            while (categoryX + textWidth(catText) > maxCatValue) {
-                if (maxCatValue >= categoryX || catSize < 8f) {
+            // shrink text size if still too large
+            while ((categoryX + (textWidth(catText)/2)) > maxCatValue) {
+                if ((categoryX - (textWidth(catText)/2)) >= maxCatValue || catSize < 8f) {
                     catSize = 0f;
                     break;
                 }
                 catSize *= (3f/4f);
                 textSize(catSize);
             }
+            // finally draw
             if (catSize > 0) {
                 fill(255, 255, 255, 200);
                 text(catText, categoryX, textY + 3);
