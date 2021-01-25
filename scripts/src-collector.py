@@ -2,24 +2,55 @@ import base64
 import csv
 import json
 import os
+import re
 import typing
-from datetime import date
+from datetime import date, datetime
 from datetime import timedelta as td
 from hashlib import sha256
 
 import requests
 from dateutil.parser import parse
+from time import sleep
 
 api = "https://www.speedrun.com/api/v1/"
 use_milliseconds = True
 use_hours = True
-download_avatars = True
+download_avatars = 10
 pfp_dir = os.path.join("..", "data", "pfps")
 country_dir = os.path.join("..", "data", "flags")
 pfps = []
 checked_pfps = []
+checked_runs = []
 countries = []
 checked_countries = []
+
+
+twitch_client = ""  # https://dev.twitch.tv/console/apps/
+twitch_access = ""  # https://id.twitch.tv/oauth2/authorize?client_id=XXXXXXXXXXXXXXX&redirect_uri=http://localhost&response_type=token&scope=channel:read:subscriptions -- grab auth token from redirect url
+if os.path.exists('twitch.txt'):
+    with open('twitch.txt', 'r') as x:
+        lines = [y.strip() for y in x.readlines()]
+        twitch_client = lines[0]
+        twitch_access = lines[1]
+twitch_headers = {"client-id": twitch_client, "Authorization": "Bearer "+twitch_access}
+twitch_sleep: datetime = None
+twitch_id = re.compile(r"(\d{7,10})")
+
+yt_client = ""
+yt_access = ""
+if os.path.exists('youtube.txt'):
+    with open('youtube.txt', 'r') as x:
+        lines = [y.strip() for y in x.readlines()]
+        yt_client = lines[0]  # https://console.developers.google.com/apis/credentials
+        yt_access = lines[1]  # https://accounts.google.com/o/oauth2/v2/auth?response_type=code&access_type=offline&client_id=XXXXXXXXXXXX&redirect_uri=urn:ietf:wg:oauth:2.0:oob&scope=https://www.googleapis.com/auth/youtube.readonly
+yt_re = re.compile(r"([A-Za-z0-9_\-]{24})")
+yt_params = {
+    "access_token": yt_access,
+    "key": yt_client,
+    "part": "snippet"
+}
+yt_link = re.compile(r"youtu(?:\.be|be\.com)", re.IGNORECASE)
+yt_id = re.compile(r"([A-Za-z0-9_\-]{11})")
 
 
 def download_flag(country: str):
@@ -98,12 +129,6 @@ class Speedrun:
                 country = auth['location']['country']['code']
                 download_flag(country)
 
-        # this code really shouldn't be here but i'm lazy
-        if self.author_uuid not in checked_pfps:
-            checked_pfps.append(self.author_uuid)
-            if self._get_avatar():
-                pfps.append(self.author_uuid)
-
         if 'category_name' in run:
             self.category = run['category_name']
         else:
@@ -121,29 +146,93 @@ class Speedrun:
         elif self.raw_data['status']['verify-date']:
             self.performed = parse(self.raw_data['status']['verify-date']).date()
 
-    def _get_avatar(self) -> bool:
-        if self.performed is None:
-            return False
-        if len(self.authors) != 1:
-            return False
-        if not download_avatars:
-            return False
-        if 'weblink' not in self.authors[0]:
-            return False
-        name = self.authors[0]['weblink'].split('/')[-1]
-        dest = os.path.join(pfp_dir, self.author_uuid + ".png")
-        if os.path.exists(dest):
-            return True
-        with requests.get(f"https://www.speedrun.com/themes/user/{name}/image.png?version=", stream=True) as r:
-            if r.status_code != 200:
-                return False
-            with open(dest, 'wb') as f:
-                for c in r.iter_content(1024):
-                    f.write(c)
-                return True
-
     def __str__(self):
         return f"{self.human_time} by {' & '.join(self.author_names)} on {self.performed}"
+
+
+def get_dest(uuid: str):
+    return os.path.join(pfp_dir, uuid + ".png")
+
+
+def get_avatar(run: Speedrun) -> bool:
+    if len(run.authors) != 1:
+        return False
+    if not download_avatars:
+        return False
+    if 'weblink' not in run.authors[0]:
+        return False
+    auth = run.authors[0]
+    name = auth['weblink'].split('/')[-1]
+    dest = get_dest(run.author_uuid)
+    if os.path.exists(dest):
+        return True
+    if download_file(f"https://www.speedrun.com/themes/user/{name}/image.png?version=", dest):
+        return True
+    if download_twitch(auth, dest):
+        return True
+    if download_youtube(auth, dest):
+        return True
+    return False
+
+
+def query_twitch(url: str, params: dict = None) -> typing.List[dict]:
+    global twitch_sleep
+    if twitch_sleep is not None:
+        delta = twitch_sleep - datetime.utcnow()
+        sleep_sec = delta.total_seconds()
+        if sleep_sec > 0:
+            sleep(sleep_sec)
+        twitch_sleep = None
+
+    with requests.get(url, params=params, headers=twitch_headers) as r:
+        if r.headers['Ratelimit-Remaining'] == 0:
+            twitch_sleep = parse(r.headers['Ratelimit-Reset'])
+        if r.status_code != 200:
+            return []
+        return r.json()['data']
+
+
+def download_twitch(auth: dict, dest: str) -> bool:
+    if not twitch_client or auth['twitch'] is None:
+        return False
+    twitch_name = auth['twitch']['uri'].strip('/').split('/')[-1]
+    data = query_twitch("https://api.twitch.tv/helix/users", {"login": twitch_name})
+    if not data:
+        return False
+
+    for t_user in data:
+        if t_user['display_name'].lower() == twitch_name.lower():
+            return t_user['thumbnail_url'] and download_file(t_user['thumbnail_url'], dest)
+
+
+def download_youtube(auth: dict, dest: str) -> bool:
+    if yt_client and auth['youtube'] is not None:
+        match = yt_re.search(auth['youtube']['uri'])
+        if not match:
+            return False
+
+        params = yt_params.copy()
+        params['id'] = match.group(1)
+
+        with requests.get(f"https://www.googleapis.com/youtube/v3/channels", params) as r:
+            if r.status_code != 200:
+                return False
+            data = r.json()
+            if data['pageInfo']['totalResults'] > 0:
+                channel = data['items'][0]
+                snip = channel['snippet']
+                thumb = snip['thumbnails']
+                return 'medium' in thumb and download_file(thumb['medium']['url'], dest)
+
+
+def download_file(url: str, dest: str):
+    with requests.get(url, stream=True) as r:
+        if r.status_code != 200:
+            return False
+        with open(dest, 'wb') as f2:
+            for c in r.iter_content(1024):
+                f2.write(c)
+        return True
 
 
 def fetch(query: str, params: dict = None) -> typing.Union[typing.Dict, typing.List]:
@@ -275,7 +364,11 @@ def main():
             return
 
     global download_avatars
-    download_avatars = boolean_input("Would you like to download user avatars?", True)
+    print("How many users do you wish to display? This is used for downloading avatars. Enter 0 to skip.")
+    count = input("> ")
+    if count == "":
+        count = "0"
+    download_avatars = int(count)
 
     # # process data # #
 
@@ -306,6 +399,7 @@ def main():
     print("Generating player data")
 
     sruns = sorted(filter(lambda x: x.performed is not None, map(Speedrun, runs)), key=lambda x: x.performed)
+    srunrawmap = {x.id: x for x in sruns}
     srunmap = {}
     runner_dict = {}
     for r in sruns:
@@ -362,6 +456,47 @@ def main():
             _day += _inc
             if not check:
                 break
+
+    if download_avatars > 0:
+        print("Saving avatars")
+
+        with open("runs.csv", 'r', newline='') as f:
+            z = csv.DictReader(f, fieldnames=list(out.keys()), quoting=csv.QUOTE_NONE)
+            z.__next__()
+            for row in z:
+                runs = sorted(map(lambda x: srunrawmap[x], filter(lambda x: x != "", list(row.values())[1:])), key=lambda x: x.time)[:download_avatars]
+                run: Speedrun
+                for run in runs:
+                    if run.author_uuid not in checked_pfps:
+                        checked_pfps.append(run.author_uuid)
+                        if get_avatar(run):
+                            pfps.append(run.author_uuid)
+
+                    # try to find runner pfp via VOD links
+                    if run.id not in checked_runs and run.author_uuid not in pfps and run.raw_data['videos'] and run.raw_data['videos']['links']:
+                        checked_runs.append(run.id)
+                        for _l in run.raw_data['videos']['links']:
+                            link: str = _l['uri']
+                            if 'twitch.tv' in link.lower() and (m := twitch_id.search(link)):
+                                v_id = m.group(1)
+                                video = query_twitch("https://api.twitch.tv/helix/videos", {"id": v_id})
+                                if video:
+                                    video = video[0]
+                                    user = query_twitch("https://api.twitch.tv/helix/users", {"id": video['user_id']})
+                                    if user and user[0]['profile_image_url'] and download_file(user[0]['profile_image_url'], get_dest(run.author_uuid)):
+                                        pfps.append(run.author_uuid)
+                                        break
+
+                            if yt_link.search(link) and (m := yt_id.search(link)):
+                                params = yt_params.copy()
+                                params['id'] = m.group(1)
+                                with requests.get("https://www.googleapis.com/youtube/v3/videos", params) as r:
+                                    if r.status_code == 200 and (j := r.json())['pageInfo']['totalResults'] > 0:
+                                        channel_id = j['items'][0]['snippet']['channelId']
+                                        fake_user = {"youtube": {"uri": "https://www.youtube.com/channel/"+channel_id}}
+                                        if download_youtube(fake_user, get_dest(run.author_uuid)):
+                                            pfps.append(run.author_uuid)
+                                            break
 
     print("Generating metadata")
 
