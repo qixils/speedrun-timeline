@@ -73,6 +73,8 @@ public class VisApplet extends PApplet {
     public static final int FLAG_DIMENSIONS = BAR_HEIGHT-IMAGE_PADDING;
     public static final int MULTI_PADDING = 50;
     public static final int MULTI_MIN_PADDING = 16;
+    // public static final int FLAG_STROKE_WIDTH = 2;
+    // public static final int FLAG_STROKE_DIMENSIONS = FLAG_DIMENSIONS + (FLAG_STROKE_WIDTH*2);
 
     public static final float GRAY_COLOR = 204f;
     public static final float DARK_GRAY_COLOR = 85f;
@@ -85,7 +87,7 @@ public class VisApplet extends PApplet {
 
 
     public static final boolean USE_MILLISECONDS = true;
-    public static final boolean MULTI_MODE = true; // whether multiple categories were used in the creation of the dataset
+    public static final boolean MULTI_MODE = false; // whether multiple categories were used in the creation of the dataset
     public static final String CATEGORY = "Any%";
 
     static {
@@ -565,8 +567,12 @@ public class VisApplet extends PApplet {
             int nameWidth = (int) textWidth(displayName);
 
             // runner flag
-            int flagX = textX+nameWidth+4;
-            image(sr.getFlag(), flagX, y+IMAGE_PADDING-2, FLAG_DIMENSIONS, FLAG_DIMENSIONS);
+            int flagX = textX+nameWidth+4;//+FLAG_STROKE_WIDTH;
+            int flagY = y+IMAGE_PADDING-2;
+            // stroke code commented out because the flag files have whitespace so it doesnt really work
+            // fill(255);
+            // rect(flagX-FLAG_STROKE_WIDTH, flagY-FLAG_STROKE_WIDTH, FLAG_STROKE_DIMENSIONS, FLAG_STROKE_DIMENSIONS);
+            image(sr.getFlag(), flagX, flagY, FLAG_DIMENSIONS, FLAG_DIMENSIONS);
 
             // draw time w/ small milliseconds
             fill(255);

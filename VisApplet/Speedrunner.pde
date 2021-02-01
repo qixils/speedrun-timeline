@@ -129,11 +129,13 @@ public class Speedrunner implements Comparable<Speedrunner> {
         if (isSolid) {
             return new Color(Integer.parseInt(style.getJSONObject("color").getString(COLOR_TYPE_NAME).substring(1), 16));
         } else {
-            int color1 = Integer.parseInt(style.getJSONObject("color-from").getString(COLOR_TYPE_NAME).substring(1), 16);
-            int color2 = Integer.parseInt(style.getJSONObject("color-to").getString(COLOR_TYPE_NAME).substring(1), 16);
-            return new Color((color1+color2)/2);
+            Color color1 = new Color(Integer.parseInt(style.getJSONObject("color-from").getString(COLOR_TYPE_NAME).substring(1), 16));
+            Color color2 = new Color(Integer.parseInt(style.getJSONObject("color-to").getString(COLOR_TYPE_NAME).substring(1), 16));
+            return new Color(avg(color1.getRed(), color2.getRed()), avg(color1.getGreen(), color2.getGreen()), avg(color1.getBlue(), color2.getBlue()));
         }
     }
+
+    public static int avg(int i1, int i2) {return (i1+i2)/2;}
 
     public String getUuid() {
         return this.uuid;

@@ -202,7 +202,7 @@ def download_twitch(auth: dict, dest: str) -> bool:
 
     for t_user in data:
         if t_user['display_name'].lower() == twitch_name.lower():
-            return t_user['thumbnail_url'] and download_file(t_user['thumbnail_url'], dest)
+            return 'thumbnail_url' in t_user and download_file(t_user['thumbnail_url'], dest)
 
 
 def download_youtube(auth: dict, dest: str) -> bool:
@@ -375,7 +375,8 @@ def main():
     # fun pagination time !
     print("Fetching runs, please wait...")
     runs = []
-    cats = map(lambda x: fetch(f"categories/{x}"), ["wkpoo02r", "7dgrrxk4", "n2y55mko", "7kjpp4k3", "xk9gg6d0", "7kjrxx42", "7dggqwxd", "vdoq6z9k"])
+    # cats = map(lambda x: fetch(f"categories/{x}"), ["wkpoo02r", "7dgrrxk4", "n2y55mko", "7kjpp4k3", "xk9gg6d0", "7kjrxx42", "7dggqwxd", "vdoq6z9k"])
+    cats = [category]
     for c in cats:
         offset = 0
         while True:
