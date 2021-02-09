@@ -29,7 +29,7 @@ public class VisApplet extends PApplet {
     public PImage coverImage = null;
     public PImage missingFlag;
 //    public VideoExport videoExport;
-    public String categoryName = CATEGORY;
+    public String categoryName;
 
     public PFont font;
     public int frames = 0;//(int) (FRAMES_PER_DAY*365*5.7);
@@ -71,7 +71,7 @@ public class VisApplet extends PApplet {
     public static final int NAME_TEXT_OFFSET = 14;
     public static final int IMAGE_PADDING = 4;
     public static final int FLAG_DIMENSIONS = BAR_HEIGHT-IMAGE_PADDING;
-    public static final int MULTI_PADDING = 50;
+    public static final int MULTI_PADDING = 25;
     public static final int MULTI_MIN_PADDING = 16;
     // public static final int FLAG_STROKE_WIDTH = 2;
     // public static final int FLAG_STROKE_DIMENSIONS = FLAG_DIMENSIONS + (FLAG_STROKE_WIDTH*2);
@@ -87,8 +87,7 @@ public class VisApplet extends PApplet {
 
 
     public static final boolean USE_MILLISECONDS = true;
-    public static final boolean MULTI_MODE = false; // whether multiple categories were used in the creation of the dataset
-    public static final String CATEGORY = "Any%";
+    public static final boolean MULTI_MODE = true; // whether multiple categories were used in the creation of the dataset
 
     static {
         rand.setSeed(1152003);
@@ -115,7 +114,7 @@ public class VisApplet extends PApplet {
         }
 
         metadata = loadJSONObject("metadata.json");
-        if (!MULTI_MODE) categoryName = metadata.getString("category");
+        categoryName = metadata.getString("category");
 //        videoExport = new VideoExport(this, (metadata.getString("game")+"-"+categoryName).replaceAll("[^A-Za-z0-9 \\-_]", "_")+".mp4");
         if (metadata.getBoolean("cover")) coverImage = loadImage(IMAGE_FOLDER+"_cover.png");
         List<String> pfps = Arrays.asList(metadata.getJSONArray("pfps").getStringArray());
@@ -334,13 +333,14 @@ public class VisApplet extends PApplet {
         } catch (ArrayIndexOutOfBoundsException e) {
 //            videoExport.endMovie();
             e.printStackTrace();
-//            exit();
+            exit();
         }
 
         frames++;
     }
 
     public void drawBackground(float currentDay) {
+        tint(255, 255);
         fill(255f);
         textFont(font, DATE_FONT_SIZE);
 
@@ -543,6 +543,7 @@ public class VisApplet extends PApplet {
                 }
 
                 // finally render img
+                tint(255, 255);
                 image(pImage, textX+wOffset, y+IMAGE_PADDING+hOffset, imgW, imgH);
                 textX += maxDim + 6; // offset username text
             }
@@ -566,12 +567,17 @@ public class VisApplet extends PApplet {
             text(displayName, textX, textY);
             int nameWidth = (int) textWidth(displayName);
 
+            int maxX = textX+nameWidth+MULTI_PADDING;
+            int maxX2 = platX;
+
             // runner flag
             int flagX = textX+nameWidth+4;//+FLAG_STROKE_WIDTH;
-            int flagY = y+IMAGE_PADDING-2;
+            int flagAlpha = 230-(flagX+FLAG_DIMENSIONS-x);
+            int flagY = y + IMAGE_PADDING - 2;
             // stroke code commented out because the flag files have whitespace so it doesnt really work
             // fill(255);
             // rect(flagX-FLAG_STROKE_WIDTH, flagY-FLAG_STROKE_WIDTH, FLAG_STROKE_DIMENSIONS, FLAG_STROKE_DIMENSIONS);
+            tint(255, flagAlpha);
             image(sr.getFlag(), flagX, flagY, FLAG_DIMENSIONS, FLAG_DIMENSIONS);
 
             // draw time w/ small milliseconds
@@ -581,20 +587,28 @@ public class VisApplet extends PApplet {
             int timeY = textY+3;
             int timeWidth;
             if (!USE_MILLISECONDS || timeText.indexOf('.') == -1) {
-                text(timeText, timeX, timeY);
                 timeWidth = (int) textWidth(timeText);
+                int timeOldX = timeX;
+                timeX = getMaxTimeX(timeX, maxX, maxX2, timeWidth);
+                if (timeX != timeOldX) platX = timeX+PLATFORM_MARGIN;
+                text(timeText, timeX, timeY);
             } else {
                 int offset = timeText.length() - 5;
                 String others = timeText.substring(0, offset);
                 String millis = timeText.substring(offset);
                 textSize(NAME_FONT_SIZE * (1f / 2f));
-                text(millis, timeX, timeY);
+                // do some silly size things to ensure times don't become a glob of mess if bar is stretched wide
                 int mOffset = (int) textWidth(millis);
-
                 textSize(NAME_FONT_SIZE);
+                timeWidth = mOffset + (int) textWidth(others);
+                textSize(NAME_FONT_SIZE * (1f / 2f));
+                // draw text
+                int timeOldX = timeX;
+                timeX = getMaxTimeX(timeX, maxX, maxX2, timeWidth);
+                if (timeX != timeOldX) platX = timeX+PLATFORM_MARGIN;
+                text(millis, timeX, timeY);
                 timeX -= mOffset;
                 text(others, timeX, timeY);
-                timeWidth = (int) textWidth(others);
             }
 
             // draw category if in multi category mode
@@ -621,7 +635,7 @@ public class VisApplet extends PApplet {
                         catSize = 0f;
                         break;
                     }
-                    catSize *= (3f/4f);
+                    catSize *= (99f/100f);
                     textSize(catSize);
                 }
                 // finally draw
@@ -636,6 +650,15 @@ public class VisApplet extends PApplet {
             fill(DARK_GRAY_COLOR);
             text(getPlatformDisplay(run), platX, y+BAR_HEIGHT_HALF);
         }
+    }
+
+    public static int getMaxTimeX(int timeX, int maxX, int maxX2, int timeWidth) {
+        int timeMaxX = maxX + timeWidth;
+        int timeMaxX2 = maxX2 + timeWidth;
+        if (timeMaxX > timeX) {
+            timeX = max(timeMaxX, timeMaxX2);
+        }
+        return timeX;
     }
 
     public static String getShortPlatform(String platform) {

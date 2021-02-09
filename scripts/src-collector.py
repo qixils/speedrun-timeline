@@ -15,6 +15,7 @@ from time import sleep
 api = "https://www.speedrun.com/api/v1/"
 use_milliseconds = True
 use_hours = True
+display_multi_category = True
 download_avatars = 10
 pfp_dir = os.path.join("..", "data", "pfps")
 country_dir = os.path.join("..", "data", "flags")
@@ -23,6 +24,7 @@ checked_pfps = []
 checked_runs = []
 countries = []
 checked_countries = []
+variables = {}
 
 
 twitch_client = ""  # https://dev.twitch.tv/console/apps/
@@ -129,10 +131,12 @@ class Speedrun:
                 country = auth['location']['country']['code']
                 download_flag(country)
 
-        if 'category_name' in run:
-            self.category = run['category_name']
-        else:
-            self.category = run['category']
+        var_names = []
+        if run['values']:
+            var_names = list(map(lambda x: variables[x], filter(lambda x: x in variables, run['values'].values())))
+        if display_multi_category:
+            var_names.insert(0, run['category_name'])
+        self.category = "/".join(var_names)
 
     def _set_time(self):
         if 'kn04ewol' in self.raw_data['values'] and self.raw_data['values']['kn04ewol'] == '4qyxop3l':
@@ -298,12 +302,14 @@ def boolean_input(prompt: str, default: bool = None) -> bool:
         print("Could not process your input, please try again.")
 
 
-def list_input(prompt: str, options: typing.List, default: int = None, mappings: typing.List = None):
-    def rtrn(value: int):
-        value -= 1
+def list_input(prompt: str, options: typing.List, default: int = None, mappings: typing.List = None) -> typing.List[typing.Any]:
+    def rtrn(values: typing.Union[int, typing.List[int]]):
+        if isinstance(values, int):
+            values = [values]
+        out = [n-1 for n in values]
         if mappings is not None:
-            return mappings[value]
-        return value
+            out = list(map(lambda n: mappings[n], out))
+        return out
 
     if len(options) != len(mappings):
         raise ValueError("Length of options and mappings don't match")
@@ -321,12 +327,14 @@ def list_input(prompt: str, options: typing.List, default: int = None, mappings:
         if choice == "":
             return rtrn(default)
         try:
-            choice = int(choice)
-            if not (0 <= choice <= len(options)):
-                raise IndexError("Option out of index")
-            if choice == 0:
-                return None
-            return rtrn(choice)
+            choices = []
+            for i in choice.split(' '):
+                choice = int(i)
+                if not (0 <= choice <= len(options)):
+                    raise IndexError("Option out of index")
+                if choice != 0:
+                    choices.append(choice)
+            return rtrn(choices)
         except (ValueError, IndexError):
             print("Could not process your input, please try again.")
 
@@ -350,18 +358,34 @@ def main():
 
     # get category
     game_id = game['id']
-    categories = list(filter(lambda x: x['type'] == "per-game", fetch(f"games/{game_id}/categories")))
+    categories = list(filter(lambda x: x['type'] == "per-game", fetch(f"games/{game_id}/categories", {"embed": "variables"})))
     if len(categories) == 0:
         print("No categories found.")
         return
     if len(categories) == 1:
-        category = categories[0]
-        print(f"Using the only category {category['name']}.")
+        u_categories = categories
+        print(f"Using the only category {u_categories[0]['name']}.")
     else:
-        cat_names = [x['name'] for x in categories]
-        category = list_input("Please select the desired category.", cat_names, 1, categories)
-        if category is None:
+        cat_names = [c['name'] for c in categories]
+        u_categories = list_input("Please select the desired category. Multiple may be selected (space-separated).", cat_names, 1, categories)
+        if u_categories is None:
             return
+
+    global variables
+    for category in categories:
+        cat_vars = category['variables']['data']
+        for var in cat_vars:
+            if var['mandatory'] and var['is-subcategory'] and not var['user-defined']:
+                for value, data in var['values']['values'].items():
+                    variables[value] = data['label']
+
+    cat_name = u_categories[0]['name']
+    if len(u_categories) > 1 or variables:
+        print("Please enter the name of the category to display at the top of the screen")
+        cat_name = input("> ")
+
+        global display_multi_category
+        display_multi_category = boolean_input("Would you like to show the name of the category in multi-mode?", True)
 
     global download_avatars
     print("How many users do you wish to display? This is used for downloading avatars. Enter 0 to skip.")
@@ -376,8 +400,7 @@ def main():
     print("Fetching runs, please wait...")
     runs = []
     # cats = map(lambda x: fetch(f"categories/{x}"), ["wkpoo02r", "7dgrrxk4", "n2y55mko", "7kjpp4k3", "xk9gg6d0", "7kjrxx42", "7dggqwxd", "vdoq6z9k"])
-    cats = [category]
-    for c in cats:
+    for c in u_categories:
         offset = 0
         while True:
             try:
@@ -504,7 +527,7 @@ def main():
     with open("metadata.json", "w") as f:
         json.dump({
             "game": game['names']['international'],
-            "category": category['name'],
+            "category": cat_name,
             "runs": srunmap,
             "players": runner_dict,
             "pfps": pfps,
