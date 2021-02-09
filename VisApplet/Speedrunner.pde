@@ -135,7 +135,7 @@ public class Speedrunner implements Comparable<Speedrunner> {
         }
     }
 
-    public static int avg(int i1, int i2) {return (i1+i2)/2;}
+    public int avg(int i1, int i2) {return (i1+i2)/2;}
 
     public String getUuid() {
         return this.uuid;
