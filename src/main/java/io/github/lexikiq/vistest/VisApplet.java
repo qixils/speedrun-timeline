@@ -30,6 +30,8 @@ public class VisApplet extends PApplet {
     public PImage missingFlag;
 //    public VideoExport videoExport;
     public String categoryName;
+    public boolean useMilliseconds;
+    public boolean useMultiMode;
 
     public PFont font;
     public int frames = 0;//(int) (FRAMES_PER_DAY*365*5.7);
@@ -85,10 +87,6 @@ public class VisApplet extends PApplet {
     public static final int UNITS_GOAL = 3; // how many units we'd like to fit on screen
     public static final int TICK_FADE_SPEED = 3; // how fast the tick marks fade (not exactly in seconds)
 
-
-    public static final boolean USE_MILLISECONDS = true;
-    public static final boolean MULTI_MODE = true; // whether multiple categories were used in the creation of the dataset
-
     static {
         rand.setSeed(1152003);
     }
@@ -115,6 +113,8 @@ public class VisApplet extends PApplet {
 
         metadata = loadJSONObject("metadata.json");
         categoryName = metadata.getString("category");
+        useMilliseconds = metadata.getBoolean("milli");
+        useMultiMode = metadata.getBoolean("multi");
 //        videoExport = new VideoExport(this, (metadata.getString("game")+"-"+categoryName).replaceAll("[^A-Za-z0-9 \\-_]", "_")+".mp4");
         if (metadata.getBoolean("cover")) coverImage = loadImage(IMAGE_FOLDER+"_cover.png");
         List<String> pfps = Arrays.asList(metadata.getJSONArray("pfps").getStringArray());
@@ -196,7 +196,7 @@ public class VisApplet extends PApplet {
                 String head = header[c];
                 Speedrunner speedrunner = speedrunners.get(head);
                 speedrunner.values[i - 1] = time-MIN_VALUE;
-                speedrunner.displayValues[i - 1] = displayTime(time, USE_MILLISECONDS, true, true);
+                speedrunner.displayValues[i - 1] = displayTime(time, useMilliseconds, true, true);
 
                 // save runs
                 int runIndex = -1;
@@ -586,7 +586,7 @@ public class VisApplet extends PApplet {
             int timeX = x-4;
             int timeY = textY+3;
             int timeWidth;
-            if (!USE_MILLISECONDS || timeText.indexOf('.') == -1) {
+            if (!useMilliseconds || timeText.indexOf('.') == -1) {
                 timeWidth = (int) textWidth(timeText);
                 int timeOldX = timeX;
                 timeX = getMaxTimeX(timeX, maxX, maxX2, timeWidth);
@@ -612,7 +612,7 @@ public class VisApplet extends PApplet {
             }
 
             // draw category if in multi category mode
-            if (MULTI_MODE) {
+            if (useMultiMode) {
                 textAlign(LEFT);
                 float catSize = NAME_FONT_SIZE;
                 textSize(catSize);
@@ -641,7 +641,7 @@ public class VisApplet extends PApplet {
                 // finally draw
                 if (catSize > 0) {
                     fill(255, 255, 255, 200);
-                    text(catText, categoryX, textY + 3);
+                    text(catText, categoryX, textY + 2);
                 }
             }
 

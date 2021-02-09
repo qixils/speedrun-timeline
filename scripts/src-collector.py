@@ -25,6 +25,7 @@ checked_runs = []
 countries = []
 checked_countries = []
 variables = {}
+blacklist = []
 
 
 twitch_client = ""  # https://dev.twitch.tv/console/apps/
@@ -139,8 +140,10 @@ class Speedrun:
         self.category = "/".join(var_names)
 
     def _set_time(self):
-        if 'kn04ewol' in self.raw_data['values'] and self.raw_data['values']['kn04ewol'] == '4qyxop3l':
-            # silly hack-fix to ignore "unverified" runs on sm64 leaderboards
+        vals = self.raw_data['values'].values()
+        if any((v in vals for v in blacklist)):
+            # silly hack-fix to ignore blacklisted variables
+            # (this prevents any time from getting set, which means the run is discarded)
             pass
         elif self.raw_data['date'] is not None:
             _date = list(map(int, self.raw_data['date'].split('-')))
@@ -302,9 +305,9 @@ def boolean_input(prompt: str, default: bool = None) -> bool:
         print("Could not process your input, please try again.")
 
 
-def list_input(prompt: str, options: typing.List, default: int = None, mappings: typing.List = None) -> typing.List[typing.Any]:
+def list_input(prompt: str, options: typing.List, default: typing.List = None, mappings: typing.List = None) -> typing.List[typing.Any]:
     def rtrn(values: typing.Union[int, typing.List[int]]):
-        if isinstance(values, int):
+        if not isinstance(values, list):
             values = [values]
         out = [n-1 for n in values]
         if mappings is not None:
@@ -325,10 +328,10 @@ def list_input(prompt: str, options: typing.List, default: int = None, mappings:
     while True:
         choice = input("> ")
         if choice == "":
-            return rtrn(default)
+            return default
         try:
             choices = []
-            for i in choice.split(' '):
+            for i in choice.strip().split(' '):
                 choice = int(i)
                 if not (0 <= choice <= len(options)):
                     raise IndexError("Option out of index")
@@ -350,7 +353,7 @@ def main():
         games: typing.List[dict] = get_input("Please enter the game name or abbreviation.", "games", ("abbreviation", "name"), False, 5)
         if len(games) > 1:
             game_names = [x['names']['international'] for x in games]
-            game = list_input("Please select the game from the list.", game_names, 1, games)
+            game = list_input("Please select the game from the list.", game_names, [1], games)
             conf = game is not None
         else:
             game = games[0]
@@ -367,7 +370,7 @@ def main():
         print(f"Using the only category {u_categories[0]['name']}.")
     else:
         cat_names = [c['name'] for c in categories]
-        u_categories = list_input("Please select the desired category. Multiple may be selected (space-separated).", cat_names, 1, categories)
+        u_categories = list_input("Please select the desired category. Multiple may be selected (space-separated).", cat_names, [1], categories)
         if u_categories is None:
             return
 
@@ -385,7 +388,15 @@ def main():
         cat_name = input("> ")
 
         global display_multi_category
-        display_multi_category = boolean_input("Would you like to show the name of the category in multi-mode?", True)
+        display_multi_category = len(u_categories) > 1
+
+    if len(variables.keys()) > 1:
+        keys = list_input("Please select the allowed variables. Assumes all of them by default.",
+                          list(variables.values()), mappings=list(variables.keys()))
+        global blacklist
+        blacklist = []
+        if keys is not None:
+            blacklist = [b for b in variables.keys() if b not in keys]
 
     global download_avatars
     print("How many users do you wish to display? This is used for downloading avatars. Enter 0 to skip.")
@@ -497,7 +508,8 @@ def main():
                             pfps.append(run.author_uuid)
 
                     # try to find runner pfp via VOD links
-                    if run.id not in checked_runs and run.author_uuid not in pfps and run.raw_data['videos'] and run.raw_data['videos']['links']:
+                    if run.id not in checked_runs and run.author_uuid not in pfps and 'videos' in run.raw_data and \
+                            run.raw_data['videos'] and 'links' in run.raw_data['videos']:
                         checked_runs.append(run.id)
                         for _l in run.raw_data['videos']['links']:
                             link: str = _l['uri']
@@ -532,7 +544,9 @@ def main():
             "players": runner_dict,
             "pfps": pfps,
             "cover": has_cover,
-            "flags": countries
+            "flags": countries,
+            "multi": boolean_input("Would you like to use multi-category mode?", len(u_categories) > 1 or variables),
+            "milli": boolean_input("Would you like to display milliseconds (where available)?", True)
         }, f)
 
 
